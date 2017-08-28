@@ -1,3 +1,5 @@
+DECLARE SUB Battle (bShips() AS INTEGER)
+DECLARE FUNCTION IsFlag! (flag%, numflags%)
 DECLARE SUB WorldTick ()
 DECLARE SUB PlanetMake (Nm$)
 DECLARE SUB MoveShip (i%)
@@ -10,13 +12,16 @@ DECLARE SUB ShipMake (Nm$, cl$, SPos%, Fct%)
 DECLARE SUB ShipShow (own%)
 
 '$DYNAMIC
-DIM SHARED ScrWidth AS INTEGER
-DIM SHARED ScrHeight AS INTEGER
+CONST MAXPLANETS = 15
+CONST SHIPNULL = -1
+CONST SHIPEXPLORE = -2
+
+CONST NumFactions = 2
+CONST FctPlayer = 1
+CONST FctSytherian = 2
 
 CLS
-ScrWidth = 639
-ScrHeight = 199
-SCREEN 8
+COLOR 15
 
 TYPE Planet
   Nm AS STRING * 40
@@ -29,7 +34,7 @@ END TYPE
 TYPE Ship
   Nm AS STRING * 40
   Class AS STRING * 10
-  Atk AS INTEGER
+  atk AS INTEGER
   Hp AS INTEGER
   MaxHp AS INTEGER
   SPos AS INTEGER
@@ -39,7 +44,7 @@ END TYPE
 
 DIM SHARED Ships(255) AS Ship
 DIM SHARED LastShip AS INTEGER
-DIM SHARED Planets(15) AS Planet
+DIM SHARED Planets(MAXPLANETS) AS Planet
 DIM SHARED LastPlanet AS INTEGER
 DIM SHARED PlayerPos AS INTEGER
 PlayerPos = 0
@@ -50,8 +55,9 @@ Turn = 0
 
 'Test
 
-ShipMake "HMS Pinafore", "Dreadnought", PlayerPos, 0
-ShipMake "Sytherian Destroyer", "Destroyer", 2, 1
+ShipMake "HMS Pinafore", "Dreadnought", PlayerPos, FctPlayer
+ShipMake "HMS Hood", "Dreadnought", PlayerPos, FctPlayer
+ShipMake "Sytherian Destroyer", "Destroyer", PlayerPos, FctSytherian
 
 PlanetMake "Earth"
 PlanetMake "Mars"
@@ -61,6 +67,32 @@ DO
 LOOP
 
 REM $STATIC
+SUB Battle (bShips() AS INTEGER)
+
+'Attacks (simultaneous)
+shipn% = UBOUND(bShips) - 1
+FOR i% = 0 TO shipn%
+  target% = RND * shipn%
+  WHILE Ships(bShips(target%)).Fct = Ships(bShips(i%)).Fct
+    target% = RND * shipn%
+  WEND
+  PRINT RTRIM$(Ships(bShips(i%)).Nm); " attacks "; RTRIM$(Ships(bShips(target%)).Nm)
+  atk% = RND * Ships(bShips(i%)).atk
+  Ships(bShips(target%)).Hp = Ships(bShips(target%)).Hp - atk%
+  PRINT atk%; "damage was done"
+NEXT
+
+'Calculate losses
+FOR i% = 0 TO shipn%
+  IF Ships(bShips(i%)).Hp <= 0 THEN
+    PRINT RTRIM$(Ships(bShips(i%)).Nm); " was destroyed!"
+    Ships(bShips(i%)).SPos = SHIPNULL
+  END IF
+NEXT
+
+SLEEP
+END SUB
+
 SUB Build
 
 IF Planets(PlayerPos).Ex >= 2 THEN
@@ -84,7 +116,7 @@ END IF
 IF a$ = "d" AND Credits >= 2000 THEN
   PRINT "Name ship:"
   INPUT n$
-  ShipMake n$, "Dreadnought", PlayerPos, 0
+  ShipMake n$, "Dreadnought", PlayerPos, FctPlayer
   Credits = Credits - 2000
   Planets(PlayerPos).Ex = Planets(PlayerPos).Ex + 1
 END IF
@@ -100,17 +132,30 @@ PlayerPos = a% - 1
 PlanetView
 END SUB
 
+FUNCTION IsFlag (flag%, numflags%)
+
+FOR i% = 0 TO numflags% - 1
+  IF flag% - (2 ^ i%) = 0 THEN
+    IsFlag = 1
+    EXIT FUNCTION
+  END IF
+NEXT
+
+IsFlag = 0
+
+END FUNCTION
+
 SUB MoveShip (i%)
 
 PRINT "Where should " + Ships(i%).Nm + " go?"
 PlanetShow (1)
 INPUT a%
-IF a% > UBOUND(Planets) + 1 THEN
-  PRINT Ships(i%).Nm + " heads off on a mission of exploration..."
-  Ships(i%).SPos = -1
+IF a% > LastPlanet THEN
+  PRINT RTRIM$(Ships(i%).Nm) + " heads off on a mission of exploration..."
+  Ships(i%).SPos = SHIPEXPLORE
 ELSE
   Ships(i%).SPos = a% - 1
-  PRINT Ships(i%).Nm; "jumps to " + Planets(a% - 1).Nm
+  PRINT RTRIM$(Ships(i%).Nm); "jumps to " + Planets(a% - 1).Nm
   Ships(i%).Ex = 1
 END IF
 
@@ -125,6 +170,7 @@ ShipShow 1
 DIM selected AS INTEGER
 selected = 0
 INPUT a%
+IF a% = 0 THEN EXIT SUB
 FOR i% = 0 TO LastShip - 1
   IF Ships(i%).SPos = PlayerPos AND Ships(i%).Fct = 0 THEN selected = selected + 1
   IF selected = a% AND Ships(i%).Ex = 0 THEN
@@ -187,7 +233,7 @@ SUB ShipMake (Nm$, cl$, SPos%, Fct%)
 
 Ships(LastShip).Nm = Nm$
 Ships(LastShip).Class = cl$
-Ships(LastShip).Atk = 5
+Ships(LastShip).atk = 5
 Ships(LastShip).Hp = 5
 Ships(LastShip).MaxHp = 5
 Ships(LastShip).SPos = SPos%
@@ -203,7 +249,7 @@ FOR i% = 0 TO LastShip - 1
   IF Ships(i%).SPos = PlayerPos AND own% = 0 THEN
     it% = it% + 1
     COLOR 15 - Ships(i%).Fct
-    PRINT it%; "- "; Ships(i%).Nm
+    PRINT it%; "- "; RTRIM$(Ships(i%).Nm); Ships(i%).Hp
     COLOR 15
   ELSEIF Ships(i%).SPos = PlayerPos THEN
     IF Ships(i%).Fct = 0 THEN
@@ -217,21 +263,55 @@ END SUB
 
 SUB WorldTick
 
+DIM EncPlanets(MAXPLANETS) AS INTEGER
+
 CLS
-PRINT "Cool things happen here..."
 
-'Reset all ships
-FOR i% = 0 TO UBOUND(Ships)
-  Ships(i%).Ex = 0
+'Check for encounters and reset ships
+FOR s% = 0 TO LastShip - 1
+  SELECT CASE Ships(s%).SPos
+    CASE SHIPEXPLORE:
+      PRINT RTRIM$(Ships(s%).Nm); " reports no discoveries. Their mission continues."
+      SLEEP
+    CASE SHIPNULL:
+      'skip
+    CASE ELSE:
+      EncPlanets(Ships(s%).SPos) = EncPlanets(Ships(s%).SPos) + 1
+  END SELECT
+  Ships(s%).Ex = 0
 NEXT
 
-'Reset all planets
-FOR i% = 0 TO UBOUND(Planets)
-  Planets(i%).Ex = 0
+'Reset planets
+FOR p% = 0 TO UBOUND(Planets)
+  Planets(p%).Ex = 0
 NEXT
 
-SLEEP
+'Run ship-ship encounters
+DIM bShips(0) AS INTEGER
+FOR i% = 0 TO UBOUND(EncPlanets)
+  IF EncPlanets(i%) > 1 THEN
+    REDIM bShips(EncPlanets(i%)) AS INTEGER
+    sel% = 0
+    fcts% = 0
+    FOR s% = 0 TO LastShip - 1
+      IF Ships(s%).SPos = i% THEN
+        bShips(sel%) = s%
+        fcts% = fcts% OR Ships(s%).Fct
+        sel% = sel% + 1
+        END IF
+    NEXT
+    IF IsFlag(fcts%, NumFactions) <> 1 THEN
+      CLS
+      PRINT "There is a battle at "; Planets(i%).Nm
+      SLEEP
+      Battle bShips()
+    END IF
+  END IF
+NEXT
+
 Turn = 0
+
+
 
 END SUB
 
