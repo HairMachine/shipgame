@@ -1,3 +1,5 @@
+DECLARE FUNCTION PlanetRandomName$ ()
+DECLARE SUB UCFIRST (in$)
 DECLARE FUNCTION PlanetMenu! ()
 DECLARE FUNCTION ShipMenu! ()
 '$INCLUDE: 'shipgame/menukey.bi'
@@ -17,6 +19,8 @@ DECLARE SUB ShipMake (Nm$, cl$, SPos%, Fct%)
 DECLARE SUB ShipShow (own%)
 
 '$DYNAMIC
+RANDOMIZE TIMER
+
 CONST MAXPLANETS = 15
 CONST SHIPNULL = -1
 CONST SHIPEXPLORE = -2
@@ -44,7 +48,7 @@ TYPE Ship
   Fct AS INTEGER
 END TYPE
 
-DIM SHARED ships(255) AS Ship
+DIM SHARED Ships(255) AS Ship
 DIM SHARED LastShip AS INTEGER
 DIM SHARED Planets(MAXPLANETS) AS Planet
 DIM SHARED LastPlanet AS INTEGER
@@ -78,20 +82,22 @@ SUB Battle (bShips() AS INTEGER)
 shipn% = UBOUND(bShips) - 1
 FOR i% = 0 TO shipn%
   target% = RND * shipn%
-  WHILE ships(bShips(target%)).Fct = ships(bShips(i%)).Fct
+  WHILE Ships(bShips(target%)).Fct = Ships(bShips(i%)).Fct
     target% = RND * shipn%
   WEND
-  PRINT RTRIM$(ships(bShips(i%)).Nm); " attacks "; RTRIM$(ships(bShips(target%)).Nm)
-  atk% = RND * ships(bShips(i%)).atk
-  ships(bShips(target%)).Hp = ships(bShips(target%)).Hp - atk%
-  PRINT atk%; "damage was done"
+  PRINT
+  PRINT RTRIM$(Ships(bShips(i%)).Nm); " fired on "; RTRIM$(Ships(bShips(target%)).Nm) + "!"
+  atk% = RND * Ships(bShips(i%)).atk
+  Ships(bShips(target%)).Hp = Ships(bShips(target%)).Hp - atk%
+  PRINT atk%; "damage was done."
 NEXT
 
 'Calculate losses
 FOR i% = 0 TO shipn%
-  IF ships(bShips(i%)).Hp <= 0 THEN
-    PRINT RTRIM$(ships(bShips(i%)).Nm); " was destroyed!"
-    ships(bShips(i%)).SPos = SHIPNULL
+  IF Ships(bShips(i%)).Hp <= 0 THEN
+    PRINT
+    PRINT RTRIM$(Ships(bShips(i%)).Nm); " was destroyed!"
+    Ships(bShips(i%)).SPos = SHIPNULL
   END IF
 NEXT
 
@@ -113,7 +119,9 @@ SUB Build
   DIM Menu(numitems%) AS MenuOption
 
   CLS
-  PRINT "Build:"
+  PRINT "BUILD STRUCTURES AND SHIPS"
+  PRINT "**************************"
+  PRINT
   MenuAddOption Menu(), 0, "s", "(S)tarbase (1000c)"
   IF Planets(PlayerPos).SB > 0 THEN :
     MenuAddOption Menu(), 1, "d", "(D)readnought (2000c)"
@@ -151,9 +159,11 @@ END FUNCTION
 SUB PlanetChange
 
 CLS
-PRINT "View which planet?"
+PRINT "VIEW NEW PLANET"
+PRINT "***************"
+PRINT
 a% = PlanetMenu
-IF a% < LastPlanet THEN PlayerPos = a% - 1
+IF a% <= LastPlanet THEN PlayerPos = a% - 1
 PlanetView
 END SUB
 
@@ -187,6 +197,28 @@ FUNCTION PlanetMenu
 
 END FUNCTION
 
+FUNCTION PlanetRandomName$
+  DIM syls(10) AS STRING
+  syls(0) = "do"
+  syls(1) = "ka"
+  syls(2) = "non"
+  syls(3) = "ea"
+  syls(4) = "aa"
+  syls(5) = "cha"
+  syls(6) = "ti"
+  syls(7) = "is"
+  syls(8) = "zi"
+  syls(9) = "xo"
+  name$ = ""
+  ns% = RND * 4 + 1
+  FOR i% = 0 TO ns%
+    r% = RND * UBOUND(syls)
+    name$ = name$ + syls(r%)
+  NEXT
+  UCFIRST name$
+  PlanetRandomName$ = name$
+END FUNCTION
+
 SUB PlanetShow (Ex%)
 
 FOR i% = 0 TO LastPlanet - 1
@@ -200,6 +232,9 @@ END SUB
 SUB PlanetView
 
 CLS
+PRINT "VIEWING PLANET DETAILS"
+PRINT "**********************"
+PRINT
 PRINT Planets(PlayerPos).Nm
 PRINT "Starbases:"; Planets(PlayerPos).SB
 PRINT "Credits: "; Credits
@@ -226,13 +261,13 @@ END SUB
 
 SUB ShipMake (Nm$, cl$, SPos%, Fct%)
 
-ships(LastShip).Nm = Nm$
-ships(LastShip).Class = cl$
-ships(LastShip).atk = 5
-ships(LastShip).Hp = 5
-ships(LastShip).MaxHp = 5
-ships(LastShip).SPos = SPos%
-ships(LastShip).Fct = Fct%
+Ships(LastShip).Nm = Nm$
+Ships(LastShip).Class = cl$
+Ships(LastShip).atk = 5
+Ships(LastShip).Hp = 5
+Ships(LastShip).MaxHp = 5
+Ships(LastShip).SPos = SPos%
+Ships(LastShip).Fct = Fct%
 LastShip = LastShip + 1
 
 END SUB
@@ -242,7 +277,7 @@ FUNCTION ShipMenu
   DIM OptMap(LastShip - 1) AS INTEGER
   sel% = 0
   FOR i% = 0 TO LastShip - 1
-    IF ships(i%).SPos = PlayerPos AND ships(i%).Fct = FctPlayer THEN
+    IF Ships(i%).SPos = PlayerPos AND Ships(i%).Fct = FctPlayer THEN
       OptMap(sel%) = i%
       sel% = sel% + 1
     END IF
@@ -250,7 +285,7 @@ FUNCTION ShipMenu
 
   DIM Menu(sel%) AS MenuOption
   FOR i% = 0 TO sel% - 1
-    MenuAddOption Menu(), i%, STR$(i% + 1), LTRIM$(STR$(i% + 1) + ") " + ships(OptMap(i%)).Nm)
+    MenuAddOption Menu(), i%, STR$(i% + 1), LTRIM$(STR$(i% + 1) + ") " + Ships(OptMap(i%)).Nm)
   NEXT
   MenuAddOption Menu(), sel%, "b", "(B)ack"
   MenuDisplay Menu()
@@ -265,19 +300,19 @@ END FUNCTION
 
 SUB ShipMove (i%)
 
-PRINT "Where should " + RTRIM$(ships(i%).Nm) + " go?"
+PRINT "Where should " + RTRIM$(Ships(i%).Nm) + " go?"
 
 a% = PlanetMenu - 1
 IF a% = LastPlanet THEN
-  PRINT RTRIM$(ships(i%).Nm) + " heads off on a mission of exploration..."
-  ships(i%).SPos = SHIPEXPLORE
+  PRINT RTRIM$(Ships(i%).Nm) + " heads off on a mission of exploration..."
+  Ships(i%).SPos = SHIPEXPLORE
   SLEEP
 ELSEIF a% > LastPlanet THEN
   EXIT SUB
 ELSE
-  ships(i%).SPos = a%
-  PRINT RTRIM$(ships(i%).Nm); "jumps to " + Planets(a%).Nm
-  ships(i%).Ex = 1
+  Ships(i%).SPos = a%
+  PRINT RTRIM$(Ships(i%).Nm); "jumps to " + Planets(a%).Nm
+  Ships(i%).Ex = 1
   SLEEP
 END IF
 
@@ -287,15 +322,15 @@ SUB ShipShow (own%)
 
 it% = 0
 FOR i% = 0 TO LastShip - 1
-  IF ships(i%).SPos = PlayerPos AND own% = 0 THEN
+  IF Ships(i%).SPos = PlayerPos AND own% = 0 THEN
     it% = it% + 1
-    COLOR 15 - ships(i%).Fct
-    PRINT it%; "- "; RTRIM$(ships(i%).Nm); ships(i%).Hp
+    COLOR 15 - Ships(i%).Fct
+    PRINT it%; "- "; RTRIM$(Ships(i%).Nm); Ships(i%).Hp
     COLOR 15
-  ELSEIF ships(i%).SPos = PlayerPos THEN
-    IF ships(i%).Fct = FctPlayer THEN
+  ELSEIF Ships(i%).SPos = PlayerPos THEN
+    IF Ships(i%).Fct = FctPlayer THEN
       it% = it% + 1
-      PRINT it%; "- "; ships(i%).Nm
+      PRINT it%; "- "; Ships(i%).Nm
     END IF
   END IF
 NEXT
@@ -306,11 +341,13 @@ SUB ShipsMove
 
  WHILE sel% = 0
     CLS
-    PRINT "Which ship to move?"
+    PRINT "MOVE SHIPS"
+    PRINT "**********"
+    PRINT
     sel% = ShipMenu
     IF sel% > LastShip - 1 THEN
       EXIT SUB
-    ELSEIF ships(sel%).Ex = 0 THEN
+    ELSEIF Ships(sel%).Ex = 0 THEN
       ShipMove sel%
       sel% = 0
     ELSE
@@ -322,25 +359,44 @@ SUB ShipsMove
 
 END SUB
 
+SUB UCFIRST (in$)
+  ad% = SADD(in$)
+  POKE ad%, (PEEK(ad%) - 32)
+END SUB
+
 SUB WorldTick
 
 DIM EncPlanets(MAXPLANETS) AS INTEGER
 
 CLS
+PRINT "EXPLORER'S LOG"
+PRINT "**************"
+PRINT
 
 'Check for encounters and reset ships
+expl% = 0
 FOR s% = 0 TO LastShip - 1
-  SELECT CASE ships(s%).SPos
+  SELECT CASE Ships(s%).SPos
     CASE SHIPEXPLORE:
-      PRINT RTRIM$(ships(s%).Nm); " reports no discoveries. Their mission continues."
-      SLEEP
+      'Todo: Proper exploration subroutine
+      expl% = 1
+      r% = RND * 3 + 1
+      IF r% < 3 THEN
+        PRINT RTRIM$(Ships(s%).Nm); " reports no discoveries. Their mission continues."
+      ELSE
+        PRINT RTRIM$(Ships(s%).Nm); " reports discovery of a new world!"
+        Ships(s%).SPos = LastPlanet
+        PlanetMake PlanetRandomName$
+        PRINT "The captain has christened this new world " + RTRIM$(Planets(LastPlanet - 1).Nm) + "."
+      END IF
     CASE SHIPNULL:
       'skip
     CASE ELSE:
-      EncPlanets(ships(s%).SPos) = EncPlanets(ships(s%).SPos) + 1
+      EncPlanets(Ships(s%).SPos) = EncPlanets(Ships(s%).SPos) + 1
   END SELECT
-  ships(s%).Ex = 0
+  Ships(s%).Ex = 0
 NEXT
+IF expl% THEN SLEEP
 
 'Reset planets
 FOR p% = 0 TO UBOUND(Planets)
@@ -355,16 +411,18 @@ FOR i% = 0 TO UBOUND(EncPlanets)
     sel% = 0
     fcts% = 0
     FOR s% = 0 TO LastShip - 1
-      IF ships(s%).SPos = i% THEN
+      IF Ships(s%).SPos = i% THEN
         bShips(sel%) = s%
-        fcts% = fcts% OR ships(s%).Fct
+        fcts% = fcts% OR Ships(s%).Fct
         sel% = sel% + 1
         END IF
     NEXT
     IF IsFlag(fcts%, NumFactions) <> 1 THEN
       CLS
-      PRINT "There is a battle at "; Planets(i%).Nm
-      SLEEP
+      PRINT "BATTLE REPORT"
+      PRINT "*************"
+      PRINT
+      PRINT "Battle broke out near " + RTRIM$(Planets(i%).Nm) + "!"
       Battle bShips()
     END IF
   END IF
