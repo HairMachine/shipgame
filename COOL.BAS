@@ -1,6 +1,6 @@
 DECLARE FUNCTION PlanetMenu! ()
 DECLARE FUNCTION ShipMenu! ()
-'$INCLUDE: 'menukey\menukey.bi'
+'$INCLUDE: 'shipgame/menukey.bi'
 
 DECLARE SUB PlanetChange ()
 DECLARE SUB Battle (bShips() AS INTEGER)
