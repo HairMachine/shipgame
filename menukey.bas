@@ -19,7 +19,7 @@ END SUB
 SUB MenuDisplay (Menu() AS MenuOption)
 
 FOR i% = 0 TO UBOUND(Menu)
-  IF Menu(i%).ch <> "" THEN PRINT Menu(i%).label
+  IF ASC(Menu(i%).ch) <> 0 THEN PRINT Menu(i%).label
 NEXT
 PRINT ">_"
 
@@ -54,7 +54,7 @@ FUNCTION MenuHandle$ (Menu() AS MenuOption)
 DEF SEG = &H40: POKE &H1C, PEEK(&H1A): DEF SEG
 op$ = ""
 WHILE op$ = ""
-  a$ = INPUT$(1)
+  a$ = LCASE$(INPUT$(1))
   FOR i% = 0 TO UBOUND(Menu)
     IF Menu(i%).ch = a$ THEN
       op$ = a$
