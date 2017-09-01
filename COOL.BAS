@@ -200,7 +200,7 @@ SUB BuildingsShow
   FOR i% = 0 TO LastBuilding - 1
     IF Buildings(i%).BPos = PlayerPos THEN
       COLOR 15 - Buildings(i%).Fct
-      TxtOut Buildings(i%).Nm, 2
+      TxtOut RTRIM$(Buildings(i%).Nm), 2
       COLOR 15
     END IF
   NEXT
@@ -353,10 +353,7 @@ END FUNCTION
 
 SUB PlanetChange
 
-CLS
-PRINT "VIEW NEW PLANET"
-PRINT "***************"
-PRINT
+WindowMain "VIEW NEW PLANET"
 a% = PlanetMenu
 IF a% <= LastPlanet THEN PlayerPos = a% - 1
 PlanetView
@@ -444,13 +441,18 @@ SUB PlanetView
 
   WindowMain "VIEW PLANET"
 
-  TxtOut RTRIM$(Planets(PlayerPos).Nm) + " Pop" + STR$(Planets(PlayerPos).Pop) + " Dev" + STR$(Planets(PlayerPos).Dv), 2
+  SetWindow 50, 1, 80, 23
+  COLOR 3: WindowBorder "#"
+  ShipShow 0
+  TxtOut "", 2
+  BuildingsShow
+ 
+  SetWindow 1, 3, 80, 23
+  COLOR 12: TxtOut RTRIM$(Planets(PlayerPos).Nm), 2
+  COLOR 7: TxtOut "Pop" + STR$(Planets(PlayerPos).Pop) + " Dev" + STR$(Planets(PlayerPos).Dv), 2
   TxtOut "Credits: " + STR$(Credits), 2
   TxtOut "", 2
-  ShipShow 0
-  PRINT
-  BuildingsShow
-  PRINT
+  COLOR 15
   DIM Menu(4) AS MenuOption
   MenuAddOption Menu(), 0, "v", "(V)iew planet"
   MenuAddOption Menu(), 1, "m", "(M)ove ships"
@@ -458,7 +460,6 @@ SUB PlanetView
   MenuAddOption Menu(), 3, "e", "(E)nd turn"
   MenuAddOption Menu(), 4, "q", "(Q)uit game"
   MenuDisplay Menu()
-  'a$ = ""
   a$ = MenuHandle$(Menu())
   WHILE a$ = "": a$ = INPUT$(1): WEND
   IF a$ = "v" THEN PlanetChange
@@ -590,12 +591,12 @@ FOR i% = 0 TO LastShip - 1
   IF Ships(i%).SPos = PlayerPos AND own% = 0 THEN
     it% = it% + 1
     COLOR 15 - Ships(i%).Fct
-    TxtOut STR$(it%) + "- " + RTRIM$(Ships(i%).Nm) + STR$(Ships(i%).hp), 1
+    TxtOut RTRIM$(Ships(i%).Nm) + STR$(Ships(i%).hp), 2
     COLOR 15
   ELSEIF Ships(i%).SPos = PlayerPos THEN
     IF Ships(i%).Fct = FctPlayer THEN
       it% = it% + 1
-      PRINT it%; "- "; Ships(i%).Nm
+      TxtOut RTRIM$(Ships(i%).Nm), 2
     END IF
   END IF
 NEXT
@@ -626,8 +627,8 @@ SUB WindowMain (title$)
   CLS
   SetWindow 1, 1, 80, 23
   COLOR 3: WindowBorder "#"
-  COLOR 11: TxtOut title$, 1
-  SetWindow 1, 1, LEN(title$) + 2, 3
+  COLOR 11: TxtOut "-" + title$ + "-", 1
+  SetWindow 1, 1, LEN(title$) + 4, 3
   COLOR 3: WindowBorder "#"
   COLOR 15
   SetWindow 1, 3, 80, 23
