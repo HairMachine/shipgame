@@ -1,3 +1,4 @@
+'$INCLUDE: 'shipgame/txtout.bi'
 DECLARE FUNCTION MenuHandle$ (Menu() AS ANY)
 TYPE MenuOption
   ch AS STRING * 1
@@ -19,9 +20,9 @@ END SUB
 SUB MenuDisplay (Menu() AS MenuOption)
 
 FOR i% = 0 TO UBOUND(Menu)
-  IF ASC(Menu(i%).ch) <> 0 THEN PRINT Menu(i%).label
+  IF ASC(Menu(i%).ch) <> 0 THEN TxtOut Menu(i%).label, 2
 NEXT
-PRINT ">_"
+TxtOut ">_", 2
 
 END SUB
 
