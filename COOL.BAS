@@ -1,5 +1,8 @@
+'$DYNAMIC
+'$INCLUDE: 'midilib.bi'
+
 DECLARE SUB WindowMain (title$)
-'$INCLUDE: 'shipgame/txtout.bi'
+'$INCLUDE: 'txtout.bi'
 DECLARE SUB BuildShip (Nm$, Cr%, Posi%)
 DECLARE SUB BuildingActions ()
 DECLARE SUB ActionMine ()
@@ -15,7 +18,7 @@ DECLARE FUNCTION PlanetRandomName$ ()
 DECLARE SUB UCFirst (in$)
 DECLARE FUNCTION PlanetMenu! ()
 DECLARE FUNCTION ShipMenu! ()
-'$INCLUDE: 'shipgame/menukey.bi'
+'$INCLUDE: 'menukey.bi'
                     
 DECLARE SUB PlanetChange ()
 DECLARE SUB Battle (bShips() AS INTEGER)
@@ -31,7 +34,6 @@ DECLARE SUB PlanetShow (Ex%)
 DECLARE SUB ShipMake (Nm$, cl$, SPos%, Fct%)
 DECLARE SUB ShipShow (own%)
 
-'$DYNAMIC
 RANDOMIZE TIMER
 
 CONST MAXPLANETS = 15
@@ -81,21 +83,34 @@ DIM SHARED Credits AS LONG
 Credits = 5000
 DIM SHARED Turn AS INTEGER
 DIM SHARED SytheriaLocation AS INTEGER
-
-ShipMake "HMS Pinafore", "Dreadnought", PlayerPos, FctPlayer
-ShipMake "HMS Hood", "Dreadnought", PlayerPos, FctPlayer
-ShipMake "Sytherian Destroyer", "Destroyer", PlayerPos, FctSytherian
+DIM SHARED TurnCount AS INTEGER
 
 PlanetMake "Earth"
 Planets(LastPlanet - 1).Pop = 5
 
 CLS
 COLOR 15
+
+' Detect the SBMIDI, SBSIM drivers and the sound card settings.
+DetectDrivers
+IF MIDIErrorOccured THEN PRINT MIDIError$: END
+DetectSettings
+IF MIDIErrorOccured THEN PRINT MIDIError$: END
+
+LoadMidi "meia.mid"
+PlayMidi
+CLS
+LOCATE 12, 35: PRINT "SPACE WARP"
+SLEEP
+StopMidi
+UnloadMidi
+
 DO
   IF Turn = 0 THEN PlanetView ELSE WorldTick
 LOOP
 
 REM $STATIC
+DEFSNG A-Z
 SUB Battle (bShips() AS INTEGER)
 
 'Attacks (simultaneous)
@@ -144,11 +159,11 @@ SUB Build
     MenuAddOption Menu(), 2, "f", "(F)rigate (1000c)"
     MenuAddOption Menu(), 3, "d", "(D)estroyer (2000c)"
     MenuAddOption Menu(), 4, "c", "(C)ruiser (4000c)"
-    MenuAddOption Menu(), 5, "d", "(D)readnought (8000c)"
+    MenuAddOption Menu(), 5, "b", "(B)attleship (8000c)"
     extra% = 6
   END IF
  
-  MenuAddOption Menu(), extra%, "b", "(B)ack"
+  MenuAddOption Menu(), extra%, "n", "(N)othing"
   MenuDisplay Menu()
   a$ = MenuHandle(Menu())
 
@@ -168,8 +183,8 @@ SUB Build
     BuildShip "Destroyer", 2000, PlayerPos
   ELSEIF a$ = "c" AND Credits >= 4000 THEN
     BuildShip "Cruiser", 4000, PlayerPos
-  ELSEIF a$ = "d" AND Credits >= 8000 THEN
-    BuildShip "Dreadnought", 8000, PlayerPos
+  ELSEIF a$ = "b" AND Credits >= 8000 THEN
+    BuildShip "Battleship", 8000, PlayerPos
   END IF
 
 END SUB
@@ -178,7 +193,7 @@ SUB BuildingActions
 
   FOR i% = 0 TO LastBuilding
     IF RTRIM$(Buildings(i%).Nm) = "Mine" AND Buildings(i%).BPos >= 0 THEN
-      Credits = Credits + (RND * 500) + 500
+      Credits = Credits + (RND * 250) + 250
     END IF
   NEXT
 
@@ -290,6 +305,8 @@ END SUB
 
 SUB EnemyShipSpawn
 
+  IF TurnCount < 5 THEN EXIT SUB
+
   FOR i% = 0 TO LastPlanet - 1
     r% = RND * 3 + 1
     IF r% = 3 THEN
@@ -297,15 +314,15 @@ SUB EnemyShipSpawn
       FOR s% = 0 TO LastShip
         IF Ships(s%).SPos = i% AND Ships(s%).Fct = FctSytherian THEN total% = total% + 1
       NEXT
-      n% = RND * 4
-      FOR j% = 0 TO n%
+      'n% = 0
+      'FOR j% = 0 TO n%
         IF total% <= MAXPLANETSHIPS THEN
           ShipMake "Sytherian Destroyer", "Destroyer", i%, FctSytherian
           TxtOut "A Sytherian Destroyer has appeared near " + RTRIM$(Planets(i%).Nm) + ".", 2
           total% = total% + 1
           SLEEP 'not good
         END IF
-      NEXT
+      'NEXT
     END IF
   NEXT i%
 
@@ -504,6 +521,9 @@ SUB ShipExplore (s%)
       Ships(s%).SPos = LastPlanet
       PlanetMake PlanetRandomName$
       TxtOut "The captain has christened this new world " + RTRIM$(Planets(LastPlanet - 1).Nm) + ".", 2
+      creds% = (RND * 200) + 800
+      Credits = Credits + creds%
+      TxtOut "Minerals were discovered worth" + STR$(creds%) + " credits!", 2
     ELSEIF SytheriaLocation = 0 THEN
       TxtOut RTRIM$(Ships(s%).Nm) + " has discovered the Sytherian homeworld!", 2
       Ships(s%).SPos = LastPlanet
@@ -523,7 +543,7 @@ SELECT CASE cl$
   CASE "Frigate": atk% = 1: hp% = 1
   CASE "Destroyer": atk% = 2: hp% = 2
   CASE "Cruiser": atk% = 3: hp% = 3
-  CASE "Dreadnought": atk% = 5: hp% = 5
+  CASE "Battleship": atk% = 5: hp% = 5
   CASE "Dome Ship": atk% = 10: hp% = 10
 END SELECT
 
@@ -540,6 +560,8 @@ END SUB
 
 FUNCTION ShipMenu
 
+  IF LastShip = 0 THEN EXIT FUNCTION
+ 
   DIM OptMap(LastShip - 1) AS INTEGER
   sel% = 0
   FOR i% = 0 TO LastShip - 1
@@ -660,6 +682,7 @@ FOR P% = 0 TO UBOUND(Planets)
 NEXT
 
 Turn = 0
+TurnCount = TurnCount + 1
 
 END SUB
 

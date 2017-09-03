@@ -1,4 +1,4 @@
-'$INCLUDE: 'shipgame/txtout.bi'
+'$INCLUDE: 'txtout.bi'
 DECLARE FUNCTION MenuHandle$ (Menu() AS ANY)
 TYPE MenuOption
   ch AS STRING * 1

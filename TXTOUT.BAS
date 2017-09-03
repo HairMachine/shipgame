@@ -1,4 +1,4 @@
-'$INCLUDE: 'SHIPGAME/TXTOUT.BI'
+'$INCLUDE: 'TXTOUT.BI'
 DECLARE SUB SetWindow (minx%, miny%, maxx%, maxy%)
 DECLARE SUB TxtOut (txt$, brd%)
 DECLARE SUB WindowBorder (ch$)
