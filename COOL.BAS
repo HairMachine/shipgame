@@ -100,7 +100,18 @@ IF MIDIErrorOccured THEN PRINT MIDIError$: END
 LoadMidi "meia.mid"
 PlayMidi
 CLS
-LOCATE 12, 35: PRINT "SPACE WARP"
+LOCATE 12, 20: COLOR 2: PRINT "Green Baboon Publications presents..."
+SLEEP 2
+CLS
+COLOR 4
+title$ = "SPACE WARP"
+FOR i% = 0 TO LEN(title$)
+  LOCATE 12, 35 + i%
+  COLOR RND * 15 + 1
+  PRINT MID$(title$, i% + 1, 1)
+  SLEEP 1
+NEXT
+COLOR 1: LOCATE 13, 35: PRINT "**********"
 SLEEP
 StopMidi
 UnloadMidi
