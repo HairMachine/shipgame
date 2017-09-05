@@ -1,8 +1,10 @@
 '$DYNAMIC
 '$INCLUDE: 'midilib.bi'
-
-DECLARE SUB WindowMain (title$)
 '$INCLUDE: 'txtout.bi'
+'$INCLUDE: 'menukey.bi'
+
+DECLARE SUB ShipGainXP (Ship%, Xp%)
+DECLARE SUB WindowMain (title$)
 DECLARE SUB BuildShip (Nm$, Cr%, Posi%)
 DECLARE SUB BuildingActions ()
 DECLARE SUB ActionMine ()
@@ -18,8 +20,6 @@ DECLARE FUNCTION PlanetRandomName$ ()
 DECLARE SUB UCFirst (in$)
 DECLARE FUNCTION PlanetMenu! ()
 DECLARE FUNCTION ShipMenu! ()
-'$INCLUDE: 'menukey.bi'
-                    
 DECLARE SUB PlanetChange ()
 DECLARE SUB Battle (bShips() AS INTEGER)
 DECLARE FUNCTION IsFlag! (flag%, numflags%)
@@ -55,17 +55,19 @@ END TYPE
 TYPE Ship
   Nm AS STRING * 40
   Class AS STRING * 10
-  atk AS INTEGER
-  hp AS INTEGER
+  Atk AS INTEGER
+  Hp AS INTEGER
   MaxHp AS INTEGER
   SPos AS INTEGER
   Ex AS INTEGER
   Fct AS INTEGER
+  Xp AS INTEGER
+  Lvl AS INTEGER
 END TYPE
 
 TYPE Building
   Nm AS STRING * 40
-  hp AS INTEGER
+  Hp AS INTEGER
   MaxHp AS INTEGER
   BPos AS INTEGER
   Fct AS INTEGER
@@ -90,7 +92,7 @@ Planets(LastPlanet - 1).Pop = 5
 
 CLS
 COLOR 15
-
+                      
 ' Detect the SBMIDI, SBSIM drivers and the sound card settings.
 DetectDrivers
 IF MIDIErrorOccured THEN PRINT MIDIError$: END
@@ -116,6 +118,8 @@ SLEEP
 StopMidi
 UnloadMidi
 
+BuildingMake "Mine", 0, FctPlayer
+BuildingMake "Starbase", 0, FctPlayer
 DO
   IF Turn = 0 THEN PlanetView ELSE WorldTick
 LOOP
@@ -124,28 +128,36 @@ REM $STATIC
 DEFSNG A-Z
 SUB Battle (bShips() AS INTEGER)
 
-'Attacks (simultaneous)
 shipn% = UBOUND(bShips) - 1
+IF shipn% = 0 THEN
+  TxtOut "ERROR: No ships in battle!", 2
+  SLEEP
+  EXIT SUB
+END IF
+
+'Simultaneous attacking
 FOR i% = 0 TO shipn%
   target% = RND * shipn%
   WHILE Ships(bShips(target%)).Fct = Ships(bShips(i%)).Fct
     target% = RND * shipn%
   WEND
   TxtOut RTRIM$(Ships(bShips(i%)).Nm) + " fired on " + RTRIM$(Ships(bShips(target%)).Nm) + "!", 2
-  atk% = RND * Ships(bShips(i%)).atk
-  Ships(bShips(target%)).hp = Ships(bShips(target%)).hp - atk%
-  TxtOut STR$(atk%) + " damage was done.", 2
+  Atk% = RND * Ships(bShips(i%)).Atk
+  Ships(bShips(target%)).Hp = Ships(bShips(target%)).Hp - Atk%
+  TxtOut STR$(Atk%) + " damage was done.", 2
+  'firing ship gains XP
+  ShipGainXP bShips(i%), 20
 NEXT
-
 'Calculate losses
 FOR i% = 0 TO shipn%
-  IF Ships(bShips(i%)).hp <= 0 THEN
+  IF Ships(bShips(i%)).Hp <= 0 THEN
+    COLOR 4
     TxtOut RTRIM$(Ships(bShips(i%)).Nm) + " was destroyed!", 2
+    COLOR 15
     Ships(bShips(i%)).SPos = SHIPNULL
   END IF
 NEXT
 
-SLEEP
 END SUB
 
 SUB Build
@@ -167,17 +179,14 @@ SUB Build
   'conditional buildings
   extra% = 2
   IF PlanetHasBuilding("Starbase", PlayerPos, FctPlayer) >= 1 THEN
-    MenuAddOption Menu(), 2, "f", "(F)rigate (1000c)"
-    MenuAddOption Menu(), 3, "d", "(D)estroyer (2000c)"
-    MenuAddOption Menu(), 4, "c", "(C)ruiser (4000c)"
-    MenuAddOption Menu(), 5, "b", "(B)attleship (8000c)"
-    extra% = 6
+    MenuAddOption Menu(), 2, "w", "(W)arship (1000c)"
+    extra% = 3
   END IF
  
   MenuAddOption Menu(), extra%, "n", "(N)othing"
   MenuDisplay Menu()
   a$ = MenuHandle(Menu())
-
+              
   IF a$ = "s" AND Credits >= 1000 AND Planets(PlayerPos).Dv < Planets(PlayerPos).Pop THEN
     Credits = Credits - 1000
     BuildingMake "Starbase", PlayerPos, FctPlayer
@@ -188,14 +197,8 @@ SUB Build
     BuildingMake "Mine", PlayerPos, FctPlayer
     Planets(PlayerPos).Dv = Planets(PlayerPos).Dv + 1
     Planets(PlayerPos).Ex = 1
-  ELSEIF a$ = "f" AND Credits >= 1000 THEN
-    BuildShip "Frigate", 1000, PlayerPos
-  ELSEIF a$ = "d" AND Credits >= 2000 THEN
-    BuildShip "Destroyer", 2000, PlayerPos
-  ELSEIF a$ = "c" AND Credits >= 4000 THEN
-    BuildShip "Cruiser", 4000, PlayerPos
-  ELSEIF a$ = "b" AND Credits >= 8000 THEN
-    BuildShip "Battleship", 8000, PlayerPos
+  ELSEIF a$ = "w" AND Credits >= 1000 THEN
+    BuildShip "Warship", 1000, PlayerPos
   END IF
 
 END SUB
@@ -213,7 +216,7 @@ END SUB
 SUB BuildingMake (Nm$, BPos%, Fct%)
 
   Buildings(LastBuilding).Nm = Nm$
-  Buildings(LastBuilding).hp = 10
+  Buildings(LastBuilding).Hp = 10
   Buildings(LastBuilding).MaxHp = 10
   Buildings(LastBuilding).BPos = BPos%
   Buildings(LastBuilding).Fct = Fct%
@@ -244,11 +247,33 @@ SUB BuildShip (Nm$, Cr%, Posi%)
     EXIT SUB
   END IF
 
+  SELECT CASE Nm$
+    CASE "Warship": Slots% = 2
+    CASE ELSE: Slots = 0
+  END SELECT
+
   TxtOut "Name ship:", 2
   INPUT n$
   ShipMake n$, Nm$, PlayerPos, FctPlayer
   Credits = Credits - Cr%
   Planets(Posi%).Ex = 1
+
+  WindowMain "SHIP CONSTRUCTION"
+  DIM Menu(4) AS MenuOption
+  MenuAddOption Menu(), 0, "1", "1) Gun Battery (+1 Atk)"
+  MenuAddOption Menu(), 1, "2", "2) Shield Generator (+1 MaxHp)"
+  MenuDisplay Menu()
+  FOR i% = 1 TO Slots%
+    op$ = MenuHandle(Menu())
+    IF op$ = "1" THEN Atk% = Atk% + 1
+    IF op$ = "2" THEN Hp% = Hp% + 1
+    TxtOut "Slot " + STR$(i%) + " filled", 2
+  NEXT
+  Ships(LastShip - 1).Atk = Ships(LastShip - 1).Atk + Atk%
+  Ships(LastShip - 1).Hp = Ships(LastShip - 1).Hp + Hp%
+  Ships(LastShip - 1).MaxHp = Ships(LastShip - 1).MaxHp + Hp%
+  SLEEP
+
 END SUB
 
 SUB Encounters (EncPlanets() AS INTEGER)
@@ -273,6 +298,7 @@ SUB Encounters (EncPlanets() AS INTEGER)
         WindowMain "BATTLE REPORT"
         TxtOut "Fighting broke out near " + RTRIM$(Planets(i%).Nm) + "!", 2
         Battle bShips()
+        SLEEP
       ELSE
         'Only one faction here; attack buildings
         sel% = -1
@@ -291,9 +317,9 @@ SUB Encounters (EncPlanets() AS INTEGER)
           FOR c% = 0 TO UBOUND(bShips) - 1
             r% = RND * sel%
             TxtOut RTRIM$(Ships(bShips(c%)).Nm) + " bombards " + RTRIM$(Buildings(bBuildings(r%)).Nm) + "!", 2
-            dam% = RND * Ships(bShips(c%)).atk
-            Buildings(bBuildings(r%)).hp = Buildings(bBuildings(r%)).hp - dam%
-            IF Buildings(bBuildings(r%)).hp <= 0 THEN
+            dam% = RND * Ships(bShips(c%)).Atk
+            Buildings(bBuildings(r%)).Hp = Buildings(bBuildings(r%)).Hp - dam%
+            IF Buildings(bBuildings(r%)).Hp <= 0 THEN
               TxtOut RTRIM$(Buildings(bBuildings(r%)).Nm) + " is destroyed!", 2
               Buildings(bBuildings(r%)).BPos = -1
             END IF
@@ -303,7 +329,7 @@ SUB Encounters (EncPlanets() AS INTEGER)
           WindowMain "BATTLE REPORT"
           FOR c% = 0 TO UBOUND(bShips) - 1
             TxtOut RTRIM$(Ships(bShips(c%)).Nm) + " bombards " + RTRIM$(Planets(i%).Nm) + "!", 2
-            dam% = RND * Ships(bShips(c%)).atk
+            dam% = RND * Ships(bShips(c%)).Atk
             Planets(i%).Pop = Planets(i%).Pop - dam%
           NEXT
           SLEEP
@@ -328,7 +354,7 @@ SUB EnemyShipSpawn
       'n% = 0
       'FOR j% = 0 TO n%
         IF total% <= MAXPLANETSHIPS THEN
-          ShipMake "Sytherian Destroyer", "Destroyer", i%, FctSytherian
+          ShipMake "Sytherian Destroyer", "Warship", i%, FctSytherian
           TxtOut "A Sytherian Destroyer has appeared near " + RTRIM$(Planets(i%).Nm) + ".", 2
           total% = total% + 1
           SLEEP 'not good
@@ -500,11 +526,6 @@ END SUB
 
 SUB ShipActions (EncPlanets() AS INTEGER)
 
-  'TODO: The exploring thing here is a little weird, as it does it
-  'inline and it kind of messes with the abstraction level of the sub
-  'The way the encounters works feels nicer
-  WindowMain "EXPLORER'S LOG"
-  expl% = 0
   FOR s% = 0 TO LastShip - 1
     SELECT CASE Ships(s%).SPos
       CASE SHIPEXPLORING:
@@ -517,15 +538,22 @@ SUB ShipActions (EncPlanets() AS INTEGER)
     END SELECT
     Ships(s%).Ex = 0
   NEXT
-  IF expl% THEN SLEEP
 
 END SUB
 
 SUB ShipExplore (s%)
  
+  WindowMain "EXPLORER'S LOG"
   r% = RND * 8 + 1
-  IF r% < 8 THEN
+  IF r% < 6 THEN
     TxtOut RTRIM$(Ships(s%).Nm) + " reports no discoveries. Their mission continues.", 2
+  ELSEIF r% < 8 THEN
+    TxtOut RTRIM$(Ships(s%).Nm) + " has been attacked!", 2
+    DIM bs(2) AS INTEGER
+    bs(0) = s%
+    ShipMake "Sytherian Destroyer", "Warship", SHIPNULL, FctSytherian
+    bs(1) = LastShip - 1
+    Battle bs()
   ELSE
     IF LastPlanet < 12 THEN
       TxtOut RTRIM$(Ships(s%).Nm) + " reports discovery of a new world!", 2
@@ -545,26 +573,38 @@ SUB ShipExplore (s%)
       PlanetMake "Sytheria"
     END IF
   END IF
+  SLEEP
 
+END SUB
+
+SUB ShipGainXP (Ship%, Xp%)
+  Ships(Ship%).Xp = Ships(Ship%).Xp + Xp%
+  IF Ships(Ship%).Xp > 10 * (Ships(Ship%).Lvl ^ 2) THEN
+    Ships(Ship%).Lvl = Ships(Ship%).Lvl + 1
+    Ships(Ship%).Atk = Ships(Ship%).Atk + 1
+    Ships(Ship%).MaxHp = Ships(Ship%).MaxHp + 1
+    Ships(Ship%).Hp = Ships(Ship%).Hp + 1
+    COLOR 5
+    TxtOut RTRIM$(Ships(Ship%).Nm) + " gained in expertise!", 2
+    COLOR 15
+  END IF
 END SUB
 
 SUB ShipMake (Nm$, cl$, SPos%, Fct%)
 
 SELECT CASE cl$
-  CASE "Frigate": atk% = 1: hp% = 1
-  CASE "Destroyer": atk% = 2: hp% = 2
-  CASE "Cruiser": atk% = 3: hp% = 3
-  CASE "Battleship": atk% = 5: hp% = 5
-  CASE "Dome Ship": atk% = 10: hp% = 10
+  CASE "Warship": Atk% = 0: Hp% = 1
+  CASE "Dome Ship": Atk% = 0: Hp% = 10
 END SELECT
 
 Ships(LastShip).Nm = Nm$
 Ships(LastShip).Class = cl$
-Ships(LastShip).atk = atk%
-Ships(LastShip).hp = hp%
-Ships(LastShip).MaxHp = hp%
+Ships(LastShip).Atk = Atk%
+Ships(LastShip).Hp = Hp%
+Ships(LastShip).MaxHp = Hp%
 Ships(LastShip).SPos = SPos%
 Ships(LastShip).Fct = Fct%
+Ships(LastShip).Lvl = 1
 LastShip = LastShip + 1
 
 END SUB
@@ -624,7 +664,7 @@ FOR i% = 0 TO LastShip - 1
   IF Ships(i%).SPos = PlayerPos AND own% = 0 THEN
     it% = it% + 1
     COLOR 15 - Ships(i%).Fct
-    TxtOut RTRIM$(Ships(i%).Nm) + STR$(Ships(i%).hp), 2
+    TxtOut RTRIM$(Ships(i%).Nm) + STR$(Ships(i%).Hp), 2
     COLOR 15
   ELSEIF Ships(i%).SPos = PlayerPos THEN
     IF Ships(i%).Fct = FctPlayer THEN
