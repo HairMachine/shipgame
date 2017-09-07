@@ -1,10 +1,10 @@
-DECLARE SUB Intro ()
 '$DYNAMIC
 '$INCLUDE: 'midilib.bi'
 '$INCLUDE: 'txtout.bi'
 '$INCLUDE: 'menukey.bi'
 
-DECLARE SUB ShipGainXP (Ship%, Xp%)
+DECLARE SUB Intro ()
+DECLARE SUB ShipGainXP (ship%, Xp%)
 DECLARE SUB WindowMain (title$)
 DECLARE SUB BuildShip (Nm$, Cr%, Posi%)
 DECLARE SUB BuildingActions ()
@@ -35,6 +35,24 @@ DECLARE SUB PlanetShow (Ex%)
 DECLARE SUB ShipMake (Nm$, cl$, SPos%, Fct%)
 DECLARE SUB ShipShow (own%)
 
+'TODOs and notes
+'Each ship has a class
+'This dictates which modules the ship can hold
+'Ship has a crew, which gains XP and levels up
+'The level is used for calculations in various places in the game
+'E.g. in combat, hit / miss chances per gun battery are tested using
+'compared levels
+'Combat should be extended so the player can make a choice per ship to
+'attack, flee, etc. Each gun battery can target separately.
+'All ships can have light guns, plasteel armour plating and small cargo
+'holds
+'Warships can install heavy guns and combat shielding
+'Merchantmen can install large cargo holds
+'Scouts can install warp sails (allowing exploration for a certain number
+'of turns)
+'Each module on a ship has an upkeep cost that is deducted from the player's
+'money each turn
+
 RANDOMIZE TIMER
 
 CONST MAXPLANETS = 255
@@ -54,7 +72,7 @@ TYPE Planet
   Dv AS INTEGER
 END TYPE
 
-TYPE Ship
+TYPE ship
   Nm AS STRING * 40
   Class AS STRING * 10
   Atk AS INTEGER
@@ -75,7 +93,7 @@ TYPE Building
   Fct AS INTEGER
 END TYPE
 
-DIM SHARED Ships(255) AS Ship
+DIM SHARED Ships(255) AS ship
 DIM SHARED LastShip AS INTEGER
 DIM SHARED Planets(MAXPLANETS) AS Planet
 DIM SHARED LastPlanet AS INTEGER
@@ -622,15 +640,15 @@ SUB ShipExplore (s%, EncPlanets() AS INTEGER)
 
 END SUB
 
-SUB ShipGainXP (Ship%, Xp%)
-  Ships(Ship%).Xp = Ships(Ship%).Xp + Xp%
-  IF Ships(Ship%).Xp > 10 * (Ships(Ship%).Lvl ^ 2) THEN
-    Ships(Ship%).Lvl = Ships(Ship%).Lvl + 1
-    Ships(Ship%).Atk = Ships(Ship%).Atk + 1
-    Ships(Ship%).MaxHp = Ships(Ship%).MaxHp + 1
-    Ships(Ship%).Hp = Ships(Ship%).Hp + 1
+SUB ShipGainXP (ship%, Xp%)
+  Ships(ship%).Xp = Ships(ship%).Xp + Xp%
+  IF Ships(ship%).Xp > 10 * (Ships(ship%).Lvl ^ 2) THEN
+    Ships(ship%).Lvl = Ships(ship%).Lvl + 1
+    Ships(ship%).Atk = Ships(ship%).Atk + 1
+    Ships(ship%).MaxHp = Ships(ship%).MaxHp + 1
+    Ships(ship%).Hp = Ships(ship%).Hp + 1
     COLOR 5
-    TxtOut RTRIM$(Ships(Ship%).Nm) + " gained in expertise!", 2
+    TxtOut RTRIM$(Ships(ship%).Nm) + " gained in expertise!", 2
     COLOR 15
   END IF
 END SUB
