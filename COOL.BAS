@@ -1,10 +1,11 @@
+DECLARE SUB ModuleMake (n$, s%)
 '$DYNAMIC
 '$INCLUDE: 'midilib.bi'
 '$INCLUDE: 'txtout.bi'
 '$INCLUDE: 'menukey.bi'
 
 DECLARE SUB Intro ()
-DECLARE SUB ShipGainXP (ship%, Xp%)
+DECLARE SUB ShipGainXP (Ship%, Xp%)
 DECLARE SUB WindowMain (title$)
 DECLARE SUB BuildShip (Nm$, Cr%, Posi%)
 DECLARE SUB BuildingActions ()
@@ -72,7 +73,7 @@ TYPE Planet
   Dv AS INTEGER
 END TYPE
 
-TYPE ship
+TYPE Ship
   Nm AS STRING * 40
   Class AS STRING * 10
   Atk AS INTEGER
@@ -93,12 +94,22 @@ TYPE Building
   Fct AS INTEGER
 END TYPE
 
-DIM SHARED Ships(255) AS ship
+TYPE Module
+  Nm AS STRING * 40
+  Amnt AS INTEGER
+  Upkp AS INTEGER
+  Str AS INTEGER
+  Ship AS INTEGER
+  Tp AS STRING * 3
+END TYPE
+DIM SHARED Ships(255) AS Ship
 DIM SHARED LastShip AS INTEGER
 DIM SHARED Planets(MAXPLANETS) AS Planet
 DIM SHARED LastPlanet AS INTEGER
 DIM SHARED Buildings(255) AS Building
 DIM SHARED LastBuilding AS INTEGER
+DIM SHARED Modules(255) AS Module
+DIM SHARED LastModule AS INTEGER
 DIM SHARED PlayerPos AS INTEGER
 PlayerPos = 0
 DIM SHARED Credits AS LONG
@@ -143,15 +154,26 @@ END IF
 'Simultaneous attacking
 FOR i% = 0 TO shipn%
   target% = RND * shipn%
-  WHILE Ships(bShips(target%)).Fct = Ships(bShips(i%)).Fct
-    target% = RND * shipn%
-  WEND
-  TxtOut RTRIM$(Ships(bShips(i%)).Nm) + " fired on " + RTRIM$(Ships(bShips(target%)).Nm) + "!", 2
-  Atk% = RND * Ships(bShips(i%)).Atk
-  Ships(bShips(target%)).Hp = Ships(bShips(target%)).Hp - Atk%
-  TxtOut STR$(Atk%) + " damage was done.", 2
-  'firing ship gains XP
-  ShipGainXP bShips(i%), 20
+  FOR m% = 0 TO LastModule
+   IF Modules(m%).Ship = bShips(i%) AND Modules(m%).Tp = "ATK" THEN
+      WHILE Ships(bShips(target%)).Fct = Ships(bShips(i%)).Fct
+        target% = RND * shipn%
+      WEND
+      TxtOut RTRIM$(Ships(bShips(i%)).Nm) + " fired on " + RTRIM$(Ships(bShips(target%)).Nm) + "!", 2
+      'check for hit
+      tohit% = Ships(bShips(target%)).Lvl - Ships(bShips(i%)).Lvl
+      hitroll% = RND * 12
+      IF hitroll% >= 6 + tohit% THEN
+        Atk% = Modules(m%).Str
+        Ships(bShips(target%)).Hp = Ships(bShips(target%)).Hp - Atk%
+        TxtOut "Hit! " + STR$(Atk%) + " damage was done.", 2
+        'firing ship gains XP
+        ShipGainXP bShips(i%), 5
+      ELSE
+        TxtOut "Missed!", 2
+      END IF
+   END IF
+  NEXT
 NEXT
 'Calculate losses
 FOR i% = 0 TO shipn%
@@ -289,18 +311,15 @@ SUB BuildShip (Nm$, Cr%, Posi%)
 
   WindowMain "SHIP CONSTRUCTION"
   DIM Menu(4) AS MenuOption
-  MenuAddOption Menu(), 0, "1", "1) Gun Battery (+1 Atk)"
-  MenuAddOption Menu(), 1, "2", "2) Shield Generator (+1 MaxHp)"
+  MenuAddOption Menu(), 0, "1", "1) Light Gun Battery (+1 attack)"
+  MenuAddOption Menu(), 1, "2", "2) Particle Shielding (+1 damage resistance)"
   MenuDisplay Menu()
   FOR i% = 1 TO Slots%
     op$ = MenuHandle(Menu())
-    IF op$ = "1" THEN Atk% = Atk% + 1
-    IF op$ = "2" THEN Hp% = Hp% + 1
+    IF op$ = "1" THEN ModuleMake "Light Gun Battery", LastShip - 1
+    IF op$ = "2" THEN ModuleMake "Particle Shielding", LastShip - 1
     TxtOut "Slot " + STR$(i%) + " filled", 2
   NEXT
-  Ships(LastShip - 1).Atk = Ships(LastShip - 1).Atk + Atk%
-  Ships(LastShip - 1).Hp = Ships(LastShip - 1).Hp + Hp%
-  Ships(LastShip - 1).MaxHp = Ships(LastShip - 1).MaxHp + Hp%
   SLEEP
 
 END SUB
@@ -463,6 +482,31 @@ IsFlag = 0
 
 END FUNCTION
 
+DEFINT A-Z
+SUB ModuleMake (n$, s%)
+
+  DIM md AS Module
+  SELECT CASE n$
+    CASE "Light Gun Battery":
+      md.Amnt = 0
+      md.Upkp = 1
+      md.Str = 1
+      md.Ship = s%
+      md.Tp = "ATK"
+    CASE "Particle Shielding":
+      md.Amnt = 0
+      md.Upkp = 1
+      md.Str = 1
+      md.Ship = s%
+      md.Tp = "DEF"
+  END SELECT
+
+  Modules(LastModule) = md
+  LastModule = LastModule + 1
+
+END SUB
+
+DEFSNG A-Z
 SUB PlanetChange
 
 WindowMain "VIEW NEW PLANET"
@@ -640,15 +684,12 @@ SUB ShipExplore (s%, EncPlanets() AS INTEGER)
 
 END SUB
 
-SUB ShipGainXP (ship%, Xp%)
-  Ships(ship%).Xp = Ships(ship%).Xp + Xp%
-  IF Ships(ship%).Xp > 10 * (Ships(ship%).Lvl ^ 2) THEN
-    Ships(ship%).Lvl = Ships(ship%).Lvl + 1
-    Ships(ship%).Atk = Ships(ship%).Atk + 1
-    Ships(ship%).MaxHp = Ships(ship%).MaxHp + 1
-    Ships(ship%).Hp = Ships(ship%).Hp + 1
+SUB ShipGainXP (Ship%, Xp%)
+  Ships(Ship%).Xp = Ships(Ship%).Xp + Xp%
+  IF Ships(Ship%).Xp > 10 * (Ships(Ship%).Lvl ^ 2) THEN
+    Ships(Ship%).Lvl = Ships(Ship%).Lvl + 1
     COLOR 5
-    TxtOut RTRIM$(Ships(ship%).Nm) + " gained in expertise!", 2
+    TxtOut RTRIM$(Ships(Ship%).Nm) + " gained in expertise!", 2
     COLOR 15
   END IF
 END SUB
