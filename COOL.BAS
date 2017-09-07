@@ -1,3 +1,4 @@
+DECLARE SUB Intro ()
 '$DYNAMIC
 '$INCLUDE: 'midilib.bi'
 '$INCLUDE: 'txtout.bi'
@@ -36,14 +37,15 @@ DECLARE SUB ShipShow (own%)
 
 RANDOMIZE TIMER
 
-CONST MAXPLANETS = 15
+CONST MAXPLANETS = 255
 CONST SHIPNULL = -1
 CONST SHIPEXPLORING = -2
 CONST MAXPLANETSHIPS = 4
 
-CONST NumFactions = 2
+CONST NUMFACTIONS = 3
 CONST FctPlayer = 1
 CONST FctSytherian = 2
+CONST FctMonsters = 4
 
 TYPE Planet
   Nm AS STRING * 40
@@ -86,6 +88,7 @@ Credits = 5000
 DIM SHARED Turn AS INTEGER
 DIM SHARED SytheriaLocation AS INTEGER
 DIM SHARED TurnCount AS INTEGER
+DIM SHARED NumCombats AS INTEGER
 
 PlanetMake "Earth"
 Planets(LastPlanet - 1).Pop = 5
@@ -93,33 +96,17 @@ Planets(LastPlanet - 1).Pop = 5
 CLS
 COLOR 15
                       
-' Detect the SBMIDI, SBSIM drivers and the sound card settings.
+'Detect the SBMIDI, SBSIM drivers and the sound card settings.
 DetectDrivers
 IF MIDIErrorOccured THEN PRINT MIDIError$: END
 DetectSettings
 IF MIDIErrorOccured THEN PRINT MIDIError$: END
 
-LoadMidi "meia.mid"
-PlayMidi
-CLS
-LOCATE 12, 20: COLOR 2: PRINT "Green Baboon Publications presents..."
-SLEEP 2
-CLS
-COLOR 4
-title$ = "SPACE WARP"
-FOR i% = 0 TO LEN(title$)
-  LOCATE 12, 35 + i%
-  COLOR RND * 15 + 1
-  PRINT MID$(title$, i% + 1, 1)
-  SLEEP 1
-NEXT
-COLOR 1: LOCATE 13, 35: PRINT "**********"
-SLEEP
-StopMidi
-UnloadMidi
+'Intro
 
 BuildingMake "Mine", 0, FctPlayer
 BuildingMake "Starbase", 0, FctPlayer
+
 DO
   IF Turn = 0 THEN PlanetView ELSE WorldTick
 LOOP
@@ -157,6 +144,29 @@ FOR i% = 0 TO shipn%
     Ships(bShips(i%)).SPos = SHIPNULL
   END IF
 NEXT
+
+'Calculate victory
+FOR i% = 0 TO shipn%
+  IF Ships(bShips(i%)).SPos <> SHIPNULL THEN fcts% = fcts% OR Ships(bShips(i%)).Fct
+NEXT
+IF IsFlag(fcts%, NUMFACTIONS) = 1 THEN
+  'somebody won the battle
+  SELECT CASE fcts%
+    CASE FctPlayer:
+      COLOR 10
+      TxtOut "You are victorious!", 2
+      COLOR 15
+      'If the position is not in a planet, go back to exploring
+      FOR i% = 0 TO shipn%
+        IF Ships(bShips(i%)).Fct = FctPlayer AND Ships(bShips(i%)).SPos > LastPlanet THEN Ships(bShips(i%)).SPos = SHIPEXPLORING
+      NEXT
+    CASE ELSE:
+      COLOR 12
+      TxtOut "You have been defeated!", 2
+      COLOR 15
+  END SELECT
+END IF
+
 
 END SUB
 
@@ -293,10 +303,14 @@ SUB Encounters (EncPlanets() AS INTEGER)
           sel% = sel% + 1
           END IF
       NEXT
-      IF IsFlag(fcts%, NumFactions) <> 1 THEN
+      IF IsFlag(fcts%, NUMFACTIONS) <> 1 THEN
         'More than one faction here; ship-to-ship encounter
         WindowMain "BATTLE REPORT"
-        TxtOut "Fighting broke out near " + RTRIM$(Planets(i%).Nm) + "!", 2
+        IF i% < LastPlanet THEN
+          TxtOut "Fighting broke out near " + RTRIM$(Planets(i%).Nm) + "!", 2
+        ELSE
+          TxtOut "A battle in the deep darkness of the void...", 2
+        END IF
         Battle bShips()
         SLEEP
       ELSE
@@ -392,6 +406,31 @@ SUB GameOverCheck
 
 END SUB
 
+DEFINT A-Z
+SUB Intro
+ 
+  LoadMidi "meia.mid"
+  PlayMidi
+  CLS
+  LOCATE 12, 20: COLOR 2: PRINT "Green Baboon Publications presents..."
+  SLEEP 2
+  CLS
+  COLOR 4
+  title$ = "SPACE WARP"
+  FOR i% = 0 TO LEN(title$)
+    LOCATE 12, 35 + i%
+    COLOR RND * 15 + 1
+    PRINT MID$(title$, i% + 1, 1)
+    SLEEP 1
+  NEXT
+  COLOR 1: LOCATE 13, 35: PRINT "**********"
+  SLEEP
+  StopMidi
+  UnloadMidi
+
+END SUB
+
+DEFSNG A-Z
 FUNCTION IsFlag (flag%, numflags%)
 
 FOR i% = 0 TO numflags% - 1
@@ -530,7 +569,6 @@ SUB ShipActions (EncPlanets() AS INTEGER)
     SELECT CASE Ships(s%).SPos
       CASE SHIPEXPLORING:
         ShipExplore s%
-        expl% = 1
       CASE SHIPNULL:
         'skip
       CASE ELSE:
@@ -545,15 +583,19 @@ SUB ShipExplore (s%)
  
   WindowMain "EXPLORER'S LOG"
   r% = RND * 8 + 1
-  IF r% < 6 THEN
+  IF r% < 1 THEN
     TxtOut RTRIM$(Ships(s%).Nm) + " reports no discoveries. Their mission continues.", 2
   ELSEIF r% < 8 THEN
-    TxtOut RTRIM$(Ships(s%).Nm) + " has been attacked!", 2
-    DIM bs(2) AS INTEGER
-    bs(0) = s%
-    ShipMake "Sytherian Destroyer", "Warship", SHIPNULL, FctSytherian
-    bs(1) = LastShip - 1
-    Battle bs()
+    'Create a battle in a void location (> LastPlanet)
+    cloc% = NumCombats + 100
+    NumCombats = NumCombats + 1
+    Ships(s%).SPos = cloc%
+    er% = RND * 4 + 1
+    SELECT CASE er%
+      CASE 4: ShipMake "Tentacled Monstrosity", "Tentacled Monstrosity", cloc%, FctMonsters
+      CASE ELSE: ShipMake "Sytherian Destroyer", "Warship", cloc%, FctSytherian
+    END SELECT
+    TxtOut RTRIM$(Ships(s%).Nm) + " has reported seeing a hostile " + RTRIM$(Ships(LastShip - 1).Nm) + "!", 2
   ELSE
     IF LastPlanet < 12 THEN
       TxtOut RTRIM$(Ships(s%).Nm) + " reports discovery of a new world!", 2
@@ -595,6 +637,7 @@ SUB ShipMake (Nm$, cl$, SPos%, Fct%)
 SELECT CASE cl$
   CASE "Warship": Atk% = 0: Hp% = 1
   CASE "Dome Ship": Atk% = 0: Hp% = 10
+  CASE "Tentacled Monstrosity": Atk% = 4: Hp% = 8
 END SELECT
 
 Ships(LastShip).Nm = Nm$
