@@ -97,6 +97,7 @@ END TYPE
 TYPE Module
   Nm AS STRING * 40
   Amnt AS INTEGER
+  MaxAmnt AS INTEGER
   Upkp AS INTEGER
   Str AS INTEGER
   Ship AS INTEGER
@@ -154,7 +155,7 @@ END IF
 'Simultaneous attacking
 FOR i% = 0 TO shipn%
   target% = RND * shipn%
-  FOR m% = 0 TO LastModule
+  FOR m% = 0 TO LastModule - 1
    IF Modules(m%).Ship = bShips(i%) AND Modules(m%).Tp = "ATK" THEN
       WHILE Ships(bShips(target%)).Fct = Ships(bShips(i%)).Fct
         target% = RND * shipn%
@@ -165,8 +166,24 @@ FOR i% = 0 TO shipn%
       hitroll% = RND * 12
       IF hitroll% >= 6 + tohit% THEN
         Atk% = Modules(m%).Str
+        absorbed% = 0
+        'check for shielding defence
+        FOR m2% = 0 TO LastModule - 1
+          IF absorbed% < Atk% AND Modules(m2%).Ship = bShips(target%) AND Modules(m2%).Tp = "DEF" AND Modules(m2%).Amnt >= 0 THEN
+            shld% = RND * Modules(m2%).Str
+            Atk% = Atk% - shld%
+            Modules(m2%).Amnt = Modules(m2%).Amnt - 1
+            IF Modules(m2%).Amnt <= 0 THEN
+              COLOR 13
+              TxtOut RTRIM$(Ships(bShips(target%)).Nm) + "'s " + RTRIM$(Modules(m2%).Nm) + " has been depleted.", 2
+              COLOR 15
+            END IF
+            absorbed% = absorbed% + shld%
+          END IF
+        NEXT
         Ships(bShips(target%)).Hp = Ships(bShips(target%)).Hp - Atk%
         TxtOut "Hit! " + STR$(Atk%) + " damage was done.", 2
+        IF absorbed% > 0 THEN TxtOut STR$(absorbed%) + " was absorbed by the shields.", 2
         'firing ship gains XP
         ShipGainXP bShips(i%), 5
       ELSE
@@ -175,6 +192,7 @@ FOR i% = 0 TO shipn%
    END IF
   NEXT
 NEXT
+
 'Calculate losses
 FOR i% = 0 TO shipn%
   IF Ships(bShips(i%)).Hp <= 0 THEN
@@ -486,15 +504,16 @@ DEFINT A-Z
 SUB ModuleMake (n$, s%)
 
   DIM md AS Module
+  md.Nm = n$
   SELECT CASE n$
     CASE "Light Gun Battery":
-      md.Amnt = 0
       md.Upkp = 1
       md.Str = 1
       md.Ship = s%
       md.Tp = "ATK"
     CASE "Particle Shielding":
-      md.Amnt = 0
+      md.Amnt = 3
+      md.MaxAmnt = 3
       md.Upkp = 1
       md.Str = 1
       md.Ship = s%
@@ -655,7 +674,7 @@ SUB ShipExplore (s%, EncPlanets() AS INTEGER)
     Ships(s%).SPos = cloc%
     er% = RND * 4 + 1
     SELECT CASE er%
-      CASE 1: ShipMake "Wreckers", "Wreckers", cloc%, FctMonsters
+      CASE 1: ShipMake "Wrecker Swarm", "Wreckers", cloc%, FctMonsters
       CASE 4: ShipMake "Tentacled Monstrosity", "Tentacled Monstrosity", cloc%, FctMonsters
       CASE ELSE: ShipMake "Sytherian Destroyer", "Destroyer", cloc%, FctSytherian
     END SELECT
@@ -700,8 +719,16 @@ SELECT CASE cl$
   CASE "Warship": Atk% = 0: Hp% = 1
   CASE "Dome Ship": Atk% = 0: Hp% = 10
   CASE "Tentacled Monstrosity": Atk% = 4: Hp% = 8
-  CASE "Wreckers": Atk% = 1: Hp% = 4
-  CASE "Destroyer": Atk% = 2: Hp% = 2
+  CASE "Wrecker Swarm":
+    Atk% = 1
+    Hp% = 4
+    ModuleMake "Light Gun Battery", LastShip
+  CASE "Destroyer":
+    Atk% = 2
+    Hp% = 2
+    ModuleMake "Light Gun Battery", LastShip
+    ModuleMake "Light Gun Battery", LastShip
+    ModuleMake "Particle Shielding", LastShip
 END SELECT
 
 Ships(LastShip).Nm = Nm$
