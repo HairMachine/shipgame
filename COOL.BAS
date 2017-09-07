@@ -13,7 +13,7 @@ DECLARE SUB GameOverCheck ()
 DECLARE SUB EnemyShipSpawn ()
 DECLARE SUB ShipActions (EncPlanets() AS INTEGER)
 DECLARE SUB Encounters (EncPlanets() AS INTEGER)
-DECLARE SUB ShipExplore (s%)
+DECLARE SUB ShipExplore (s%, EncPlanets() AS INTEGER)
 DECLARE SUB BuildingMake (Nm$, BPos%, Fct%)
 DECLARE FUNCTION PlanetHasBuilding! (Nm$, BPos%, Fct%)
 DECLARE SUB BuildingsShow ()
@@ -262,6 +262,7 @@ SUB BuildShip (Nm$, Cr%, Posi%)
     CASE ELSE: Slots = 0
   END SELECT
 
+  TxtOut "", 2
   TxtOut "Name ship:", 2
   INPUT n$
   ShipMake n$, Nm$, PlayerPos, FctPlayer
@@ -368,7 +369,7 @@ SUB EnemyShipSpawn
       'n% = 0
       'FOR j% = 0 TO n%
         IF total% <= MAXPLANETSHIPS THEN
-          ShipMake "Sytherian Destroyer", "Warship", i%, FctSytherian
+          ShipMake "Sytherian Destroyer", "Destroyer", i%, FctSytherian
           TxtOut "A Sytherian Destroyer has appeared near " + RTRIM$(Planets(i%).Nm) + ".", 2
           total% = total% + 1
           SLEEP 'not good
@@ -568,7 +569,7 @@ SUB ShipActions (EncPlanets() AS INTEGER)
   FOR s% = 0 TO LastShip - 1
     SELECT CASE Ships(s%).SPos
       CASE SHIPEXPLORING:
-        ShipExplore s%
+        ShipExplore s%, EncPlanets()
       CASE SHIPNULL:
         'skip
       CASE ELSE:
@@ -579,7 +580,7 @@ SUB ShipActions (EncPlanets() AS INTEGER)
 
 END SUB
 
-SUB ShipExplore (s%)
+SUB ShipExplore (s%, EncPlanets() AS INTEGER)
  
   WindowMain "EXPLORER'S LOG"
   r% = RND * 8 + 1
@@ -592,10 +593,12 @@ SUB ShipExplore (s%)
     Ships(s%).SPos = cloc%
     er% = RND * 4 + 1
     SELECT CASE er%
+      CASE 1: ShipMake "Wreckers", "Wreckers", cloc%, FctMonsters
       CASE 4: ShipMake "Tentacled Monstrosity", "Tentacled Monstrosity", cloc%, FctMonsters
-      CASE ELSE: ShipMake "Sytherian Destroyer", "Warship", cloc%, FctSytherian
+      CASE ELSE: ShipMake "Sytherian Destroyer", "Destroyer", cloc%, FctSytherian
     END SELECT
-    TxtOut RTRIM$(Ships(s%).Nm) + " has reported seeing a hostile " + RTRIM$(Ships(LastShip - 1).Nm) + "!", 2
+    EncPlanets(cloc%) = 2
+    TxtOut RTRIM$(Ships(s%).Nm) + " has encountered a hostile " + RTRIM$(Ships(LastShip - 1).Nm) + "!", 2
   ELSE
     IF LastPlanet < 12 THEN
       TxtOut RTRIM$(Ships(s%).Nm) + " reports discovery of a new world!", 2
@@ -638,6 +641,8 @@ SELECT CASE cl$
   CASE "Warship": Atk% = 0: Hp% = 1
   CASE "Dome Ship": Atk% = 0: Hp% = 10
   CASE "Tentacled Monstrosity": Atk% = 4: Hp% = 8
+  CASE "Wreckers": Atk% = 1: Hp% = 4
+  CASE "Destroyer": Atk% = 2: Hp% = 2
 END SELECT
 
 Ships(LastShip).Nm = Nm$
@@ -682,10 +687,12 @@ END FUNCTION
 
 SUB ShipMove (i%)
 
+TxtOut "", 2
 TxtOut "Where should " + RTRIM$(Ships(i%).Nm) + " go?", 2
 
 a% = PlanetMenu - 1
 IF a% = LastPlanet THEN
+  TxtOut "", 2
   TxtOut RTRIM$(Ships(i%).Nm) + " heads off on a mission of exploration...", 2
   Ships(i%).SPos = SHIPEXPLORING
   SLEEP
@@ -693,6 +700,7 @@ ELSEIF a% > LastPlanet THEN
   EXIT SUB
 ELSE
   Ships(i%).SPos = a%
+  TxtOut "", 2
   TxtOut RTRIM$(Ships(i%).Nm) + "jumps to " + Planets(a%).Nm, 2
   Ships(i%).Ex = 1
   SLEEP
