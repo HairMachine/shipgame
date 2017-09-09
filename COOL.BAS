@@ -1,4 +1,3 @@
-DECLARE SUB ClearWindow (brd%)
 '$DYNAMIC
 '$INCLUDE: 'midilib.bi'
 '$INCLUDE: 'txtout.bi'
@@ -34,7 +33,7 @@ DECLARE SUB PlanetView ()
 DECLARE SUB ChangePlanet ()
 DECLARE SUB Build ()
 DECLARE SUB PlanetShow (Ex%)
-DECLARE SUB ShipMake (Nm$, cl$, SPos%, Fct%)
+DECLARE SUB ShipMake (Nm$, Cl$, SPos%, Fct%)
 DECLARE SUB ShipShow (own%)
 
 'TODOs and notes
@@ -248,8 +247,11 @@ SUB Build
   'conditional buildings
   extra% = 2
   IF PlanetHasBuilding("Starbase", PlayerPos, FctPlayer) >= 1 THEN
-    MenuAddOption Menu(), 2, "w", "(W)arship (1000c)"
-    extra% = 3
+    MenuAddOption Menu(), 2, "w", "(W)arship (2000c)"
+    MenuAddOption Menu(), 3, "c", "S(c)out (1200c)"
+    MenuAddOption Menu(), 4, "m", "(M)erchantman (1500c)"
+    MenuAddOption Menu(), 5, "d", "(D)ome Ship (10000c)"
+    extra% = 6
   END IF
  
   MenuAddOption Menu(), extra%, "n", "(N)othing"
@@ -266,8 +268,14 @@ SUB Build
     BuildingMake "Mine", PlayerPos, FctPlayer
     Planets(PlayerPos).Dv = Planets(PlayerPos).Dv + 1
     Planets(PlayerPos).Ex = 1
-  ELSEIF a$ = "w" AND Credits >= 1000 THEN
-    BuildShip "Warship", 1000, PlayerPos
+  ELSEIF a$ = "w" AND Credits >= 2000 THEN
+    BuildShip "Warship", 2000, PlayerPos
+  ELSEIF a$ = "c" AND Credits >= 1200 THEN
+    BuildShip "Scout", 1200, PlayerPos
+  ELSEIF a$ = "m" AND Credits >= 1500 THEN
+    BuildShip "Merchantman", 1500, PlayerPos
+  ELSEIF a$ = "d" AND Credits >= 10000 THEN
+    BuildShip "Dome Ship", 10000, PlayerPos
   END IF
 
 END SUB
@@ -317,29 +325,29 @@ SUB BuildShip (Nm$, Cr%, Posi%)
   END IF
 
   DIM UniqueMods(5) AS STRING
-  DIM MaxUnique AS INTEGER
+  DIM LastUnique AS INTEGER
 
   SELECT CASE Nm$
     CASE "Warship":
       Slots% = 4
       UniqueMods(0) = "Heavy Gun Battery"
       UniqueMods(1) = "Combat Shielding"
-      MaxUnique = 2
+      LastUnique = 1
     CASE "Scout":
       Slots% = 3
       UniqueMods(0) = "Warp Sails"
       UniqueMods(1) = "Cloaking Device"
-      MaxUnique = 2
+      LastUnique = 1
     CASE "Merchantman":
       Slots% = 6
       UniqueMods(0) = "Cargo Hold"
-      MaxUnique = 1
+      LastUnique = 0
     CASE "Dome Ship":
       Slots% = 12
       UniqueMods(0) = "Heavy Gun Battery"
       UniqueMods(1) = "Habitation"
       UniqueMods(2) = "Nuclear Launchpad"
-      MaxUnique = 3
+      LastUnique = 2
     CASE ELSE: Slots = 0
   END SELECT
 
@@ -354,12 +362,19 @@ SUB BuildShip (Nm$, Cr%, Posi%)
   DIM Menu(4) AS MenuOption
   MenuAddOption Menu(), 0, "1", "1) Light Gun Battery"
   MenuAddOption Menu(), 1, "2", "2) Particle Shielding"
+  FOR i% = 0 TO LastUnique
+    MenuAddOption Menu(), i% + 2, STR$(i% + 3), STR$(i% + 3) + ") " + UniqueMods(i%)
+  NEXT
   MenuDisplay Menu()
   FOR i% = 1 TO Slots%
     op$ = MenuHandle(Menu())
-    IF op$ = "1" THEN ModuleMake "Light Gun Battery", LastShip - 1
-    IF op$ = "2" THEN ModuleMake "Particle Shielding", LastShip - 1
-    
+    IF op$ = "1" THEN
+      ModuleMake "Light Gun Battery", LastShip - 1
+    ELSEIF op$ = "2" THEN
+      ModuleMake "Particle Shielding", LastShip - 1
+    ELSEIF VAL(op$) <= LastUnique + 3 THEN
+      ModuleMake UniqueMods(VAL(op$) - 3), LastShip - 1
+    END IF
     TxtOut "Slot " + STR$(i%) + " filled", 2
   NEXT
   SLEEP
@@ -529,18 +544,29 @@ SUB ModuleMake (n$, s%)
 
   DIM md AS Module
   md.Nm = n$
+  md.Ship = s%
   SELECT CASE n$
     CASE "Light Gun Battery":
       md.Upkp = 1
       md.Str = 1
-      md.Ship = s%
       md.Tp = "ATK"
     CASE "Particle Shielding":
       md.Amnt = 3
       md.MaxAmnt = 3
       md.Upkp = 1
       md.Str = 1
-      md.Ship = s%
+      md.Tp = "DEF"
+    CASE "Heavy Gun Battery":
+      md.Amnt = 0
+      md.MaxAmnt = 0
+      md.Upkp = 3
+      md.Str = 3
+      md.Tp = "ATK"
+    CASE "Combat Shielding":
+      md.Amnt = 6
+      md.MaxAmnt = 6
+      md.Upkp = 4
+      md.Str = 2
       md.Tp = "DEF"
   END SELECT
 
@@ -751,9 +777,9 @@ SUB ShipGainXP (Ship%, Xp%)
   END IF
 END SUB
 
-SUB ShipMake (Nm$, cl$, SPos%, Fct%)
+SUB ShipMake (Nm$, Cl$, SPos%, Fct%)
 
-SELECT CASE cl$
+SELECT CASE Cl$
   CASE "Warship": Atk% = 0: Hp% = 4
   CASE "Dome Ship": Atk% = 0: Hp% = 10
   CASE "Scout": Atk% = 0: Hp% = 2
@@ -772,7 +798,7 @@ SELECT CASE cl$
 END SELECT
 
 Ships(LastShip).Nm = Nm$
-Ships(LastShip).Class = cl$
+Ships(LastShip).Class = Cl$
 Ships(LastShip).Atk = Atk%
 Ships(LastShip).Hp = Hp%
 Ships(LastShip).MaxHp = Hp%
@@ -817,10 +843,14 @@ WindowMain "MOVE SHIP"
 TxtOut "Where should " + RTRIM$(Ships(i%).Nm) + " go?", 2
 
 a% = PlanetMenu - 1
-IF a% = LastPlanet THEN
+IF a% = LastPlanet AND RTRIM$(Ships(i%).Class) = "Scout" THEN
   TxtOut "", 2
   TxtOut RTRIM$(Ships(i%).Nm) + " heads off on a mission of exploration...", 2
   Ships(i%).SPos = SHIPEXPLORING
+  SLEEP
+ELSEIF a% = LastPlanet THEN
+  TxtOut "", 2
+  TxtOut "This ship is not equipped for warp navigation.", 2
   SLEEP
 ELSEIF a% > LastPlanet THEN
   EXIT SUB
