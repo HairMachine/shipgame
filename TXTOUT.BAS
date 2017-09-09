@@ -1,4 +1,5 @@
 '$INCLUDE: 'TXTOUT.BI'
+DECLARE SUB ClearWindow (brd%)
 DECLARE SUB SetWindow (minx%, miny%, maxx%, maxy%)
 DECLARE SUB TxtOut (txt$, brd%)
 DECLARE SUB WindowBorder (ch$)
@@ -22,6 +23,14 @@ SetWindow 30, 10, 40, 13
 COLOR 10: WindowBorder "*"
 TxtOut "Balls", 1
 
+SUB ClearWindow (brd%)
+  FOR y% = WindowYMin + brd% TO WindowYMax - brd%
+    FOR x% = WindowXMin + brd% TO WindowXMax - brd%
+      LOCATE y%, x%: PRINT " "
+    NEXT
+  NEXT
+END SUB
+
 SUB SetWindow (minx%, miny%, maxx%, maxy%)
   WindowXMin = minx%
   WindowYMin = miny%
@@ -32,6 +41,14 @@ SUB SetWindow (minx%, miny%, maxx%, maxy%)
 END SUB
 
 SUB TxtOut (txt$, brd%)
+  IF CursorY + brd% >= WindowYMax - 1 THEN
+    LOCATE CursorY + brd%, CursorX + brd%: PRINT "[more]"
+    SLEEP
+    CursorY = WindowYMin
+    CursorX = WindowXMin
+    ClearWindow brd%
+  END IF
+
   LOCATE CursorY + brd%, CursorX + brd%: PRINT txt$
   CursorY = CursorY + 1
 END SUB

@@ -1,9 +1,10 @@
-DECLARE SUB ModuleMake (n$, s%)
+DECLARE SUB ClearWindow (brd%)
 '$DYNAMIC
 '$INCLUDE: 'midilib.bi'
 '$INCLUDE: 'txtout.bi'
 '$INCLUDE: 'menukey.bi'
 
+DECLARE SUB ModuleMake (n$, s%)
 DECLARE SUB Intro ()
 DECLARE SUB ShipGainXP (Ship%, Xp%)
 DECLARE SUB WindowMain (title$)
@@ -169,7 +170,7 @@ FOR i% = 0 TO shipn%
         absorbed% = 0
         'check for shielding defence
         FOR m2% = 0 TO LastModule - 1
-          IF absorbed% < Atk% AND Modules(m2%).Ship = bShips(target%) AND Modules(m2%).Tp = "DEF" AND Modules(m2%).Amnt >= 0 THEN
+          IF absorbed% <= Atk% AND Modules(m2%).Ship = bShips(target%) AND Modules(m2%).Tp = "DEF" AND Modules(m2%).Amnt > 0 THEN
             shld% = RND * Modules(m2%).Str
             Atk% = Atk% - shld%
             Modules(m2%).Amnt = Modules(m2%).Amnt - 1
@@ -315,8 +316,30 @@ SUB BuildShip (Nm$, Cr%, Posi%)
     EXIT SUB
   END IF
 
+  DIM UniqueMods(5) AS STRING
+  DIM MaxUnique AS INTEGER
+
   SELECT CASE Nm$
-    CASE "Warship": Slots% = 2
+    CASE "Warship":
+      Slots% = 4
+      UniqueMods(0) = "Heavy Gun Battery"
+      UniqueMods(1) = "Combat Shielding"
+      MaxUnique = 2
+    CASE "Scout":
+      Slots% = 3
+      UniqueMods(0) = "Warp Sails"
+      UniqueMods(1) = "Cloaking Device"
+      MaxUnique = 2
+    CASE "Merchantman":
+      Slots% = 6
+      UniqueMods(0) = "Cargo Hold"
+      MaxUnique = 1
+    CASE "Dome Ship":
+      Slots% = 12
+      UniqueMods(0) = "Heavy Gun Battery"
+      UniqueMods(1) = "Habitation"
+      UniqueMods(2) = "Nuclear Launchpad"
+      MaxUnique = 3
     CASE ELSE: Slots = 0
   END SELECT
 
@@ -329,13 +352,14 @@ SUB BuildShip (Nm$, Cr%, Posi%)
 
   WindowMain "SHIP CONSTRUCTION"
   DIM Menu(4) AS MenuOption
-  MenuAddOption Menu(), 0, "1", "1) Light Gun Battery (+1 attack)"
-  MenuAddOption Menu(), 1, "2", "2) Particle Shielding (+1 damage resistance)"
+  MenuAddOption Menu(), 0, "1", "1) Light Gun Battery"
+  MenuAddOption Menu(), 1, "2", "2) Particle Shielding"
   MenuDisplay Menu()
   FOR i% = 1 TO Slots%
     op$ = MenuHandle(Menu())
     IF op$ = "1" THEN ModuleMake "Light Gun Battery", LastShip - 1
     IF op$ = "2" THEN ModuleMake "Particle Shielding", LastShip - 1
+    
     TxtOut "Slot " + STR$(i%) + " filled", 2
   NEXT
   SLEEP
@@ -665,8 +689,18 @@ SUB ShipExplore (s%, EncPlanets() AS INTEGER)
  
   WindowMain "EXPLORER'S LOG"
   r% = RND * 8 + 1
-  IF r% < 1 THEN
-    TxtOut RTRIM$(Ships(s%).Nm) + " reports no discoveries. Their mission continues.", 2
+  IF r% < 5 THEN
+    TxtOut RTRIM$(Ships(s%).Nm) + " reports no discoveries.", 2
+    TxtOut "Should they continue their mission?", 2
+    DIM Menu(1) AS MenuOption
+    MenuAddOption Menu(), 0, "y", "(Y)es, proceed!"
+    MenuAddOption Menu(), 1, "n", "(N)o, return to port!"
+    MenuDisplay Menu()
+    a$ = MenuHandle(Menu())
+    IF a$ = "n" THEN
+      Ships(s%).SPos = 0
+      EncPlanets(0) = EncPlanets(0) + 1
+    END IF
   ELSEIF r% < 8 THEN
     'Create a battle in a void location (> LastPlanet)
     cloc% = NumCombats + 100
@@ -674,12 +708,13 @@ SUB ShipExplore (s%, EncPlanets() AS INTEGER)
     Ships(s%).SPos = cloc%
     er% = RND * 4 + 1
     SELECT CASE er%
-      CASE 1: ShipMake "Wrecker Swarm", "Wreckers", cloc%, FctMonsters
+      CASE 1 TO 2: ShipMake "Wrecker Swarm", "Wrecker Swarm", cloc%, FctMonsters
       CASE 4: ShipMake "Tentacled Monstrosity", "Tentacled Monstrosity", cloc%, FctMonsters
       CASE ELSE: ShipMake "Sytherian Destroyer", "Destroyer", cloc%, FctSytherian
     END SELECT
     EncPlanets(cloc%) = 2
     TxtOut RTRIM$(Ships(s%).Nm) + " has encountered a hostile " + RTRIM$(Ships(LastShip - 1).Nm) + "!", 2
+    SLEEP
   ELSE
     IF LastPlanet < 12 THEN
       TxtOut RTRIM$(Ships(s%).Nm) + " reports discovery of a new world!", 2
@@ -689,17 +724,18 @@ SUB ShipExplore (s%, EncPlanets() AS INTEGER)
       creds% = (RND * 200) + 800
       Credits = Credits + creds%
       TxtOut "Minerals were discovered worth" + STR$(creds%) + " credits!", 2
+      SLEEP
     ELSEIF SytheriaLocation = 0 THEN
       TxtOut RTRIM$(Ships(s%).Nm) + " has discovered the Sytherian homeworld!", 2
       Ships(s%).SPos = LastPlanet
       FOR n% = 0 TO 4
-        ShipMake "Sytherian Destroyer", "Dreadnought", LastPlanet, FctSytherian
+        ShipMake "Sytherian Destroyer", "Destroyer", LastPlanet, FctSytherian
       NEXT
       SytheriaLocation = LastPlanet
       PlanetMake "Sytheria"
+      SLEEP
     END IF
   END IF
-  SLEEP
 
 END SUB
 
@@ -707,6 +743,8 @@ SUB ShipGainXP (Ship%, Xp%)
   Ships(Ship%).Xp = Ships(Ship%).Xp + Xp%
   IF Ships(Ship%).Xp > 10 * (Ships(Ship%).Lvl ^ 2) THEN
     Ships(Ship%).Lvl = Ships(Ship%).Lvl + 1
+    Ships(Ship%).Hp = Ships(Ship%).Hp + 1
+    Ships(Ship%).MaxHp = Ships(Ship%).MaxHp + 1
     COLOR 5
     TxtOut RTRIM$(Ships(Ship%).Nm) + " gained in expertise!", 2
     COLOR 15
@@ -716,8 +754,10 @@ END SUB
 SUB ShipMake (Nm$, cl$, SPos%, Fct%)
 
 SELECT CASE cl$
-  CASE "Warship": Atk% = 0: Hp% = 1
+  CASE "Warship": Atk% = 0: Hp% = 4
   CASE "Dome Ship": Atk% = 0: Hp% = 10
+  CASE "Scout": Atk% = 0: Hp% = 2
+  CASE "Merchantman": Atk% = 0: Hp% = 6
   CASE "Tentacled Monstrosity": Atk% = 4: Hp% = 8
   CASE "Wrecker Swarm":
     Atk% = 1
@@ -773,7 +813,7 @@ END FUNCTION
 
 SUB ShipMove (i%)
 
-TxtOut "", 2
+WindowMain "MOVE SHIP"
 TxtOut "Where should " + RTRIM$(Ships(i%).Nm) + " go?", 2
 
 a% = PlanetMenu - 1
