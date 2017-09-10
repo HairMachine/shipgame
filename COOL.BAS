@@ -3,6 +3,8 @@
 '$INCLUDE: 'txtout.bi'
 '$INCLUDE: 'menukey.bi'
 
+DECLARE SUB MainView ()
+DECLARE SUB EndGame ()
 DECLARE SUB ModuleMake (n$, s%)
 DECLARE SUB Intro ()
 DECLARE SUB ShipGainXP (Ship%, Xp%)
@@ -22,7 +24,6 @@ DECLARE FUNCTION PlanetRandomName$ ()
 DECLARE SUB UCFirst (in$)
 DECLARE FUNCTION PlanetMenu! ()
 DECLARE FUNCTION ShipMenu! ()
-DECLARE SUB PlanetChange ()
 DECLARE SUB Battle (bShips() AS INTEGER)
 DECLARE FUNCTION IsFlag! (flag%, numflags%)
 DECLARE SUB WorldTick ()
@@ -67,7 +68,7 @@ CONST FctSytherian = 2
 CONST FctMonsters = 4
 
 TYPE Planet
-  Nm AS STRING * 40
+  Nm AS STRING * 20
   Pop AS INTEGER
   Ex AS INTEGER
   Dv AS INTEGER
@@ -98,18 +99,19 @@ TYPE Module
   Nm AS STRING * 40
   Amnt AS INTEGER
   MaxAmnt AS INTEGER
-  Upkp AS INTEGER
+  UpKp AS INTEGER
   Str AS INTEGER
   Ship AS INTEGER
   Tp AS STRING * 3
 END TYPE
+
 DIM SHARED Ships(255) AS Ship
 DIM SHARED LastShip AS INTEGER
 DIM SHARED Planets(MAXPLANETS) AS Planet
 DIM SHARED LastPlanet AS INTEGER
 DIM SHARED Buildings(255) AS Building
 DIM SHARED LastBuilding AS INTEGER
-DIM SHARED Modules(255) AS Module
+DIM SHARED Modules(1024) AS Module
 DIM SHARED LastModule AS INTEGER
 DIM SHARED PlayerPos AS INTEGER
 PlayerPos = 0
@@ -138,7 +140,7 @@ BuildingMake "Mine", 0, FctPlayer
 BuildingMake "Starbase", 0, FctPlayer
 
 DO
-  IF Turn = 0 THEN PlanetView ELSE WorldTick
+  IF Turn = 0 THEN MainView ELSE WorldTick
 LOOP
 
 REM $STATIC
@@ -213,6 +215,9 @@ IF IsFlag(fcts%, NUMFACTIONS) = 1 THEN
     CASE FctPlayer:
       COLOR 10
       TxtOut "You are victorious!", 2
+      reward% = RND * 500 + 100 'todo: better
+      Credits = Credits + reward%
+      TxtOut "Your ships salvage " + STR$(reward%) + " credits in scrap.", 2
       COLOR 15
       'If the position is not in a planet, go back to exploring
       FOR i% = 0 TO shipn%
@@ -282,11 +287,17 @@ END SUB
 
 SUB BuildingActions
 
+  WindowMain "PRODUCTION REPORT"
+  earnings% = 0
   FOR i% = 0 TO LastBuilding
     IF RTRIM$(Buildings(i%).Nm) = "Mine" AND Buildings(i%).BPos >= 0 THEN
-      Credits = Credits + (RND * 250) + 250
+      earnings% = earnings% + (RND * 250) + 250
     END IF
   NEXT
+
+  Credits = Credits + earnings%
+  TxtOut "Your economy made " + STR$(earnings%) + ".", 2
+  SLEEP
 
 END SUB
 
@@ -449,9 +460,13 @@ SUB Encounters (EncPlanets() AS INTEGER)
 
 END SUB
 
-SUB EnemyShipSpawn
+SUB EndGame
+  StopMidi
+  UnloadMidi
+  END
+END SUB
 
-  IF TurnCount < 5 THEN EXIT SUB
+SUB EnemyShipSpawn
 
   FOR i% = 0 TO LastPlanet - 1
     r% = RND * 3 + 1
@@ -460,15 +475,26 @@ SUB EnemyShipSpawn
       FOR s% = 0 TO LastShip
         IF Ships(s%).SPos = i% AND Ships(s%).Fct = FctSytherian THEN total% = total% + 1
       NEXT
-      'n% = 0
-      'FOR j% = 0 TO n%
+      n% = TurnCount / 20
+      IF n% > 4 THEN n% = 4
+      FOR j% = 0 TO RND * n%
         IF total% <= MAXPLANETSHIPS THEN
-          ShipMake "Sytherian Destroyer", "Destroyer", i%, FctSytherian
-          TxtOut "A Sytherian Destroyer has appeared near " + RTRIM$(Planets(i%).Nm) + ".", 2
+          c% = RND * TurnCount
+          IF c% < 10 THEN
+            ShipMake "Sytherian Scout", "Sytherian Scout", i%, FctSytherian
+          ELSEIF c% < 20 THEN
+            ShipMake "Sytherian Destroyer", "Destroyer", i%, FctSytherian
+          ELSEIF c% < 60 THEN
+            ShipMake "Sytherian Centurion", "Centurion", i%, FctSytherian
+          ELSE
+            ShipMake "Sytherian Mothership", "Mothership", i%, FctSytherian
+          END IF
           total% = total% + 1
-          SLEEP 'not good
         END IF
-      'NEXT
+      NEXT
+      TxtOut "A Sytherian fleet swoops down on " + RTRIM$(Planets(i%).Nm) + "!", 2
+      SLEEP
+      EXIT FOR
     END IF
   NEXT i%
 
@@ -476,13 +502,24 @@ END SUB
 
 SUB GameOverCheck
 
+  'Earth is destroyed
   IF Planets(0).Pop <= 0 THEN
     CLS
     PRINT "Earth has been devastated! You have lost."
     SLEEP
-    END
+    EndGame
   END IF
 
+  'You are bankrupt
+  IF Credits <= 0 THEN
+    CLS
+    PRINT "You have bankrupted the empire!"
+    PRINT "Shortly afterwards, you suffer an unfortnate hunting accident."
+    SLEEP
+    EndGame
+  END IF
+ 
+  'Sytherian home fleet is defeated
   win% = 1
   IF SytheriaLocation <> 0 THEN
     FOR s% = 0 TO LastShip
@@ -495,7 +532,7 @@ SUB GameOverCheck
       CLS
       PRINT "You have destroyed the Sytherian home fleet! Victory is yours!"
       SLEEP
-      END
+      EndGame
     END IF
   END IF
 
@@ -540,6 +577,54 @@ IsFlag = 0
 END FUNCTION
 
 DEFINT A-Z
+SUB MainView
+
+  PlayerPos = -1
+  WindowMain "OVERVIEW"
+  TxtOut "Credits: " + STR$(Credits), 2
+  TxtOut "", 2
+ 
+  'get ships
+  DIM ShipsHere(LastPlanet - 1) AS STRING
+  FOR s% = 0 TO LastShip - 1
+    id$ = MID$(Ships(s%).Class, 1, 1)
+    IF Ships(s%).SPos >= 0 AND Ships(s%).SPos < LastPlanet THEN ShipsHere(Ships(s%).SPos) = ShipsHere(Ships(s%).SPos) + id$
+  NEXT s%
+
+  'get buildings
+  DIM BuildingsHere(LastPlanet - 1) AS STRING
+  FOR b% = 0 TO LastBuilding - 1
+    id$ = MID$(Buildings(b%).Nm, 1, 1)
+    IF Buildings(b%).BPos >= 0 THEN BuildingsHere(Buildings(b%).BPos) = BuildingsHere(Buildings(b%).BPos) + id$
+  NEXT
+
+  DIM Menu(LastPlanet + 4) AS MenuOption
+  FOR m% = 0 TO LastPlanet - 1
+    row$ = STR$(m% + 1) + " - " + Planets(m%).Nm
+    row$ = row$ + " POP: " + STR$(Planets(m%).Pop)
+    row$ = row$ + " DEV: " + STR$(Planets(m%).Dv)
+    row$ = row$ + " SHIPS: " + ShipsHere(m%)
+    row$ = row$ + " BLD: " + BuildingsHere(m%)
+    MenuAddOption Menu(), m%, STR$(m% + 1), row$
+  NEXT
+  MenuAddOption Menu(), m% + 1, "-", ""
+  MenuAddOption Menu(), m% + 2, "m", "(M)ove ships"
+  MenuAddOption Menu(), m% + 3, "e", "(E)nd turn"
+  MenuAddOption Menu(), m% + 4, "q", "(Q)uit"
+  MenuDisplay Menu()
+  a$ = MenuHandle(Menu())
+  SELECT CASE a$
+    CASE "m":
+      ShipsMove
+    CASE "e": Turn = Turn + 1
+    CASE "q": EndGame
+    CASE ELSE:
+      PlayerPos = VAL(a$) - 1
+      PlanetView
+  END SELECT
+
+END SUB
+
 SUB ModuleMake (n$, s%)
 
   DIM md AS Module
@@ -547,27 +632,30 @@ SUB ModuleMake (n$, s%)
   md.Ship = s%
   SELECT CASE n$
     CASE "Light Gun Battery":
-      md.Upkp = 1
+      md.UpKp = 10
       md.Str = 1
       md.Tp = "ATK"
     CASE "Particle Shielding":
       md.Amnt = 3
       md.MaxAmnt = 3
-      md.Upkp = 1
+      md.UpKp = 10
       md.Str = 1
       md.Tp = "DEF"
     CASE "Heavy Gun Battery":
       md.Amnt = 0
       md.MaxAmnt = 0
-      md.Upkp = 3
+      md.UpKp = 30
       md.Str = 3
       md.Tp = "ATK"
     CASE "Combat Shielding":
       md.Amnt = 6
       md.MaxAmnt = 6
-      md.Upkp = 4
+      md.UpKp = 40
       md.Str = 2
       md.Tp = "DEF"
+    CASE "Tentacles":
+      md.Str = 4
+      md.Tp = "ATK"
   END SELECT
 
   Modules(LastModule) = md
@@ -576,14 +664,6 @@ SUB ModuleMake (n$, s%)
 END SUB
 
 DEFSNG A-Z
-SUB PlanetChange
-
-WindowMain "VIEW NEW PLANET"
-a% = PlanetMenu
-IF a% <= LastPlanet THEN PlayerPos = a% - 1
-PlanetView
-END SUB
-
 FUNCTION PlanetHasBuilding (Nm$, BPos%, Fct%)
 
   count% = 0
@@ -682,17 +762,12 @@ SUB PlanetView
   MenuAddOption Menu(), 0, "v", "(V)iew planet"
   MenuAddOption Menu(), 1, "m", "(M)ove ships"
   MenuAddOption Menu(), 2, "b", "(B)uild"
-  MenuAddOption Menu(), 3, "e", "(E)nd turn"
-  MenuAddOption Menu(), 4, "q", "(Q)uit game"
   MenuDisplay Menu()
   a$ = MenuHandle$(Menu())
   WHILE a$ = "": a$ = INPUT$(1): WEND
-  IF a$ = "v" THEN PlanetChange
+  IF a$ = "v" THEN EXIT SUB
   IF a$ = "m" THEN ShipsMove
   IF a$ = "b" THEN Build
-  IF a$ = "e" THEN Turn = Turn + 1
-  IF a$ = "q" THEN END
-
 END SUB
 
 SUB ShipActions (EncPlanets() AS INTEGER)
@@ -714,7 +789,7 @@ END SUB
 SUB ShipExplore (s%, EncPlanets() AS INTEGER)
  
   WindowMain "EXPLORER'S LOG"
-  r% = RND * 8 + 1
+  r% = RND * 10 + 1
   IF r% < 5 THEN
     TxtOut RTRIM$(Ships(s%).Nm) + " reports no discoveries.", 2
     TxtOut "Should they continue their mission?", 2
@@ -736,13 +811,13 @@ SUB ShipExplore (s%, EncPlanets() AS INTEGER)
     SELECT CASE er%
       CASE 1 TO 2: ShipMake "Wrecker Swarm", "Wrecker Swarm", cloc%, FctMonsters
       CASE 4: ShipMake "Tentacled Monstrosity", "Tentacled Monstrosity", cloc%, FctMonsters
-      CASE ELSE: ShipMake "Sytherian Destroyer", "Destroyer", cloc%, FctSytherian
+      CASE ELSE: ShipMake "Sytherian Scout", "Sytherian Scout", cloc%, FctSytherian
     END SELECT
     EncPlanets(cloc%) = 2
     TxtOut RTRIM$(Ships(s%).Nm) + " has encountered a hostile " + RTRIM$(Ships(LastShip - 1).Nm) + "!", 2
     SLEEP
   ELSE
-    IF LastPlanet < 12 THEN
+    IF LastPlanet < 6 + RND * 3 THEN
       TxtOut RTRIM$(Ships(s%).Nm) + " reports discovery of a new world!", 2
       Ships(s%).SPos = LastPlanet
       PlanetMake PlanetRandomName$
@@ -755,7 +830,7 @@ SUB ShipExplore (s%, EncPlanets() AS INTEGER)
       TxtOut RTRIM$(Ships(s%).Nm) + " has discovered the Sytherian homeworld!", 2
       Ships(s%).SPos = LastPlanet
       FOR n% = 0 TO 4
-        ShipMake "Sytherian Destroyer", "Destroyer", LastPlanet, FctSytherian
+        ShipMake "Sytherian Mothership", "Mothership", LastPlanet, FctSytherian
       NEXT
       SytheriaLocation = LastPlanet
       PlanetMake "Sytheria"
@@ -784,10 +859,17 @@ SELECT CASE Cl$
   CASE "Dome Ship": Atk% = 0: Hp% = 10
   CASE "Scout": Atk% = 0: Hp% = 2
   CASE "Merchantman": Atk% = 0: Hp% = 6
-  CASE "Tentacled Monstrosity": Atk% = 4: Hp% = 8
+  CASE "Tentacled Monstrosity":
+    Atk% = 4
+    Hp% = 8
+    ModuleMake "Tentacles", LastShip
   CASE "Wrecker Swarm":
     Atk% = 1
     Hp% = 4
+    ModuleMake "Light Gun Battery", LastShip
+  CASE "Sytherian Scout":
+    Atk% = 1
+    Hp% = 1
     ModuleMake "Light Gun Battery", LastShip
   CASE "Destroyer":
     Atk% = 2
@@ -795,6 +877,20 @@ SELECT CASE Cl$
     ModuleMake "Light Gun Battery", LastShip
     ModuleMake "Light Gun Battery", LastShip
     ModuleMake "Particle Shielding", LastShip
+  CASE "Centurion":
+    Hp% = 5
+    ModuleMake "Heavy Gun Battery", LastShip
+    ModuleMake "Heavy Gun Battery", LastShip
+    ModuleMake "Combat Shielding", LastShip
+  CASE "Mothership":
+    Hp% = 10
+    ModuleMake "Heavy Gun Battery", LastShip
+    ModuleMake "Heavy Gun Battery", LastShip
+    ModuleMake "Heavy Gun Battery", LastShip
+    ModuleMake "Heavy Gun Battery", LastShip
+    ModuleMake "Heavy Gun Battery", LastShip
+    ModuleMake "Combat Shielding", LastShip
+    ModuleMake "Combat Shielding", LastShip
 END SELECT
 
 Ships(LastShip).Nm = Nm$
@@ -811,14 +907,21 @@ END SUB
 
 FUNCTION ShipMenu
 
-  IF LastShip = 0 THEN EXIT FUNCTION
+  IF LastShip = 0 THEN ShipMenu = -1: EXIT FUNCTION
  
   DIM OptMap(LastShip - 1) AS INTEGER
   sel% = 0
   FOR i% = 0 TO LastShip - 1
-    IF Ships(i%).SPos = PlayerPos AND Ships(i%).Fct = FctPlayer THEN
-      OptMap(sel%) = i%
-      sel% = sel% + 1
+    IF PlayerPos > -1 THEN
+      IF Ships(i%).SPos = PlayerPos AND Ships(i%).Fct = FctPlayer THEN
+        OptMap(sel%) = i%
+        sel% = sel% + 1
+      END IF
+    ELSE
+      IF Ships(i%).SPos >= 0 AND Ships(i%).SPos < LastPlanet AND Ships(i%).Fct = FctPlayer THEN
+        OptMap(sel%) = i%
+        sel% = sel% + 1
+      END IF
     END IF
   NEXT
 
@@ -885,17 +988,22 @@ END SUB
 
 SUB ShipsMove
 
- WHILE sel% = 0
+ sel% = -1
+ WHILE sel% = -1
     WindowMain "MOVE SHIPS"
     sel% = ShipMenu
-    IF sel% > LastShip - 1 THEN
+    IF sel% = -1 THEN
+      TxtOut "You have no ships.", 2
+      sel% = 0
+      SLEEP
+    ELSEIF sel% > LastShip - 1 THEN
       EXIT SUB
     ELSEIF Ships(sel%).Ex = 0 THEN
       ShipMove sel%
-      sel% = 0
+      'sel% = 0
     ELSE
       TxtOut "This ship cannot move any further this turn.", 2
-      sel% = 0
+      'sel% = 0
       SLEEP
     END IF
   WEND
@@ -919,20 +1027,35 @@ SUB WorldTick
 
 DIM EncPlanets(MAXPLANETS) AS INTEGER
 
+'jump in enemy ships to threaten the player
+EnemyShipSpawn
+
 'Process ship actions
 ShipActions EncPlanets()
-
-'Process building actions
-BuildingActions
 
 'Process encounters
 Encounters EncPlanets()
 
+'Process building actions
+BuildingActions
+
+'Fleet upkeep costs
+cost% = 0
+FOR m% = 0 TO LastModule - 1
+  IF Ships(Modules(m%).Ship).Fct = FctPlayer AND Ships(Modules(m%).Ship).SPos <> SHIPNULL THEN
+    cost% = cost% + Modules(m%).UpKp
+  END IF
+NEXT
+FOR s% = 0 TO LastShip - 1
+  IF Ships(s%).Fct = FctPlayer THEN cost% = cost% + Ships(s%).Lvl * 50
+NEXT
+Credits = Credits - cost%
+WindowMain "FLEET UPKEEP"
+TxtOut STR$(cost%) + " credits have been spent on fleet upkeep.", 2
+SLEEP
+
 'End game checks
 GameOverCheck
-
-'jump in enemy ships to threaten the player
-EnemyShipSpawn
 
 'Reset planets
 FOR P% = 0 TO UBOUND(Planets)

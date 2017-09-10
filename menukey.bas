@@ -1,10 +1,9 @@
 '$INCLUDE: 'txtout.bi'
-DECLARE FUNCTION MenuHandle$ (Menu() AS ANY)
 TYPE MenuOption
   ch AS STRING * 1
-  label AS STRING * 30
+  label AS STRING * 60
 END TYPE
-
+DECLARE FUNCTION MenuHandle$ (Menu() AS MenuOption)
 DECLARE SUB MenuAddOption (Menu() AS MenuOption, index%, ch$, label$)
 DECLARE SUB MenuDisplay (Menu() AS MenuOption)
 'DECLARE FUNCTION MenuHandle$ (Menu() AS MenuOption)
@@ -20,7 +19,7 @@ END SUB
 SUB MenuDisplay (Menu() AS MenuOption)
 
 FOR i% = 0 TO UBOUND(Menu)
-  IF ASC(Menu(i%).ch) <> 0 THEN TxtOut Menu(i%).label, 2
+  IF ASC(Menu(i%).ch) <> 0 THEN TxtOut RTRIM$(Menu(i%).label), 2
 NEXT
 TxtOut ">_", 2
 
@@ -52,19 +51,19 @@ END SUB
 
 FUNCTION MenuHandle$ (Menu() AS MenuOption)
 
-DEF SEG = &H40: POKE &H1C, PEEK(&H1A): DEF SEG
-op$ = ""
-WHILE op$ = ""
-  a$ = LCASE$(INPUT$(1))
-  FOR i% = 0 TO UBOUND(Menu)
-    IF Menu(i%).ch = a$ THEN
-      op$ = a$
-      EXIT FOR
-    END IF
-  NEXT
-WEND
+  DEF SEG = &H40: POKE &H1C, PEEK(&H1A): DEF SEG
+  op$ = ""
+  WHILE op$ = ""
+    a$ = LCASE$(INPUT$(1))
+    FOR i% = 0 TO UBOUND(Menu)
+      IF Menu(i%).ch = a$ THEN
+        op$ = a$
+        EXIT FOR
+      END IF
+    NEXT
+  WEND
 
-MenuHandle = op$
+  MenuHandle = op$
 
 END FUNCTION
 
